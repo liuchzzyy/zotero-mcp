@@ -49,7 +49,6 @@ npx -y @smithery/cli install @54yyyu/zotero-mcp --client claude
 ### Manual Installation
 
 #### Installing via uv
-[uv](https://github.com/astral-sh/uv) is the recommended manual installation method. `uv tool` provides automatic Python version installation, dependency resolution, and a isolated Python environment for command line tools.
 
 ```bash
 uv tool install "git+https://github.com/54yyyu/zotero-mcp.git"
