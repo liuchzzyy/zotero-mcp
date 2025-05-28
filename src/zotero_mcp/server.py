@@ -66,7 +66,7 @@ def search_items(
         # Search using the query parameters
         zot.add_parameters(q=query, qmode=qmode, itemType=item_type, limit=limit, tag=tag)
         results = zot.items()
-        
+
         if not results:
             return f"No items found matching query: '{query}'{tag_condition_str}"
         
@@ -113,7 +113,8 @@ def search_items(
 
 @mcp.tool(
     name="zotero_search_by_tag",
-    description="Search for items in your Zotero library by tag."
+    description="Search for items in your Zotero library by tag. " \
+    "Conditions are ANDed, each term supports disjunction`||` and exclusion`-`."
 )
 def search_by_tag(
     tag: List[str],
@@ -123,7 +124,8 @@ def search_by_tag(
     ctx: Context
 ) -> str:
     """
-    Search for items in your Zotero library by tag.
+    Search for items in your Zotero library by tag。
+    Conditions are ANDed, each term supports disjunction`||` and exclusion`-`.
     
     Args:
         tag: List of tag conditions. Items are returned only if they satisfy 
