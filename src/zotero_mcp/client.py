@@ -136,6 +136,106 @@ def format_item_metadata(item: Dict[str, Any], include_abstract: bool = True) ->
     return "\n\n".join(lines)
 
 
+def generate_bibtex(item: Dict[str, Any]) -> str:
+    """
+    Generate BibTeX format for a Zotero item.
+    
+    Args:
+        item: Zotero item data
+    
+    Returns:
+        BibTeX formatted string
+    """
+    data = item.get("data", {})
+    item_key = data.get("key")
+    
+    # Try Better BibTeX first
+    try:
+        from zotero_mcp.better_bibtex_client import ZoteroBetterBibTexAPI
+        bibtex = ZoteroBetterBibTexAPI()
+        
+        if bibtex.is_zotero_running():
+            return bibtex.export_bibtex(item_key)
+    
+    except Exception:
+        # Continue to fallback method if Better BibTeX fails
+        pass
+    
+    # Fallback to basic BibTeX generation
+    item_type = data.get("itemType", "misc")
+    
+    if item_type in ["attachment", "note"]:
+        raise ValueError(f"Cannot export BibTeX for item type '{item_type}'")
+    
+    # Map Zotero item types to BibTeX types
+    type_map = {
+        "journalArticle": "article",
+        "book": "book", 
+        "bookSection": "incollection",
+        "conferencePaper": "inproceedings",
+        "thesis": "phdthesis",
+        "report": "techreport",
+        "webpage": "misc",
+        "manuscript": "unpublished"
+    }
+    
+    # Create citation key
+    creators = data.get("creators", [])
+    author = ""
+    if creators:
+        first = creators[0]
+        author = first.get("lastName", first.get("name", "").split()[-1] if first.get("name") else "").replace(" ", "")
+    
+    year = data.get("date", "")[:4] if data.get("date") else "nodate"
+    cite_key = f"{author}{year}_{item_key}"
+    
+    # Build BibTeX entry
+    bib_type = type_map.get(item_type, "misc")
+    lines = [f"@{bib_type}{{{cite_key},"]
+    
+    # Add fields
+    field_mappings = [
+        ("title", "title"),
+        ("publicationTitle", "journal"),
+        ("volume", "volume"),
+        ("issue", "number"),
+        ("pages", "pages"),
+        ("publisher", "publisher"),
+        ("DOI", "doi"),
+        ("url", "url"),
+        ("abstractNote", "abstract")
+    ]
+    
+    for zotero_field, bibtex_field in field_mappings:
+        if value := data.get(zotero_field):
+            # Escape special characters
+            value = value.replace("{", "\\{").replace("}", "\\}")
+            lines.append(f'  {bibtex_field} = {{{value}}},')
+    
+    # Add authors
+    if creators:
+        authors = []
+        for creator in creators:
+            if creator.get("creatorType") == "author":
+                if "lastName" in creator and "firstName" in creator:
+                    authors.append(f"{creator['lastName']}, {creator['firstName']}")
+                elif "name" in creator:
+                    authors.append(creator["name"])
+        if authors:
+            lines.append(f'  author = {{{" and ".join(authors)}}},')
+    
+    # Add year
+    if year != "nodate":
+        lines.append(f'  year = {{{year}}},')
+    
+    # Remove trailing comma from last field and close entry
+    if lines[-1].endswith(','):
+        lines[-1] = lines[-1][:-1]
+    lines.append("}")
+    
+    return "\n".join(lines)
+
+
 def get_attachment_details(
     zot: zotero.Zotero, item: Dict[str, Any]
 ) -> Optional[AttachmentDetails]:

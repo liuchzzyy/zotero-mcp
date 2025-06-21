@@ -210,6 +210,57 @@ class ZoteroBetterBibTexAPI:
             print(f"Error searching for cite keys: {e}")
             return []
 
+    def export_bibtex(self, item_key: str, library_id: int = 1) -> str:
+        """
+        Export BibTeX for a specific item using its item key.
+        
+        Args:
+            item_key: Zotero item key to export
+            library_id: Library ID (default: 1 = Personal Library)
+            
+        Returns:
+            BibTeX formatted string
+        """
+        try:
+            # Better BibTeX translator ID for BibTeX export
+            translator_id = "ca65189f-8815-4afe-8c8b-8c7c15f0edca"  # Better BibTeX
+            
+            # Step 1: Get citation key from item key
+            item_keys = [f"{library_id}:{item_key}"]
+            citation_mapping = self._make_request("item.citationkey", [item_keys])
+            
+            if not citation_mapping:
+                raise Exception(f"No citation key found for item: {item_key}")
+            
+            # Step 2: Extract citation key from mapping
+            full_item_key = f"{library_id}:{item_key}"
+            citation_key = citation_mapping.get(full_item_key)
+            
+            if not citation_key:
+                raise Exception(f"Citation key not found for item: {item_key}")
+            
+            # Step 3: Export BibTeX using citation key
+            export_result = self._make_request(
+                "item.export", 
+                [[citation_key], translator_id]
+            )
+            
+            # Handle different response formats
+            if isinstance(export_result, str):
+                return export_result
+            elif isinstance(export_result, list) and len(export_result) > 0:
+                # Sometimes the result is wrapped in an array
+                return export_result[0] if isinstance(export_result[0], str) else str(export_result[0])
+            elif isinstance(export_result, dict) and 'bibtex' in export_result:
+                return export_result['bibtex']
+            else:
+                return str(export_result)
+                
+        except Exception as e:
+            print(f"Error exporting BibTeX: {e}")
+            return ""
+
+
 def process_annotation(annotation: Dict[str, Any], attachment: Dict[str, Any], format_type: str = 'markdown') -> Dict[str, Any]:
     """
     Process a raw Zotero annotation into a more usable format.
