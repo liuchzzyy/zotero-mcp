@@ -1594,6 +1594,3 @@ def create_note(
     except Exception as e:
         ctx.error(f"Error creating note: {str(e)}")
         return f"Error creating note: {str(e)}"
-
-
-
