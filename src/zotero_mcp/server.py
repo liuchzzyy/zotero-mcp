@@ -13,6 +13,7 @@ from zotero_mcp.client import (
     AttachmentDetails,
     convert_to_markdown,
     format_item_metadata,
+    generate_bibtex,
     get_attachment_details,
     get_zotero_client,
 )
@@ -208,6 +209,7 @@ def search_by_tag(
 def get_item_metadata(
     item_key: str,
     include_abstract: bool = True,
+    format: Literal["markdown", "bibtex"] = "markdown",
     *,
     ctx: Context
 ) -> str:
@@ -216,21 +218,25 @@ def get_item_metadata(
     
     Args:
         item_key: Zotero item key/ID
-        include_abstract: Whether to include the abstract in the output
+        include_abstract: Whether to include the abstract in the output (markdown format only)
+        format: Output format - 'markdown' for detailed metadata or 'bibtex' for BibTeX citation
         ctx: MCP context
     
     Returns:
-        Markdown-formatted item metadata
+        Formatted item metadata (markdown or BibTeX)
     """
     try:
-        ctx.info(f"Fetching metadata for item {item_key}")
+        ctx.info(f"Fetching metadata for item {item_key} in {format} format")
         zot = get_zotero_client()
         
         item = zot.item(item_key)
         if not item:
             return f"No item found with key: {item_key}"
         
-        return format_item_metadata(item, include_abstract)
+        if format == "bibtex":
+            return generate_bibtex(item)
+        else:
+            return format_item_metadata(item, include_abstract)
     
     except Exception as e:
         ctx.error(f"Error fetching item metadata: {str(e)}")
