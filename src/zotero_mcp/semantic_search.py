@@ -8,6 +8,8 @@ over research libraries.
 
 import json
 import os
+import sys
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
@@ -21,6 +23,18 @@ from .utils import format_creators, is_local_mode
 from .local_db import LocalZoteroReader, get_local_zotero_reader
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def suppress_stdout():
+    """Context manager to suppress stdout temporarily."""
+    with open(os.devnull, 'w') as devnull:
+        old_stdout = sys.stdout
+        sys.stdout = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
 
 
 class ZoteroSemanticSearch:
@@ -213,27 +227,32 @@ class ZoteroSemanticSearch:
         
         return False
     
-    def _get_items_from_source(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def _get_items_from_source(self, limit: Optional[int] = None, extract_fulltext: bool = False) -> List[Dict[str, Any]]:
         """
-        Get items from either local database or API based on environment.
+        Get items from either local database or API.
+        
+        Uses local database only when both extract_fulltext=True and is_local_mode().
+        Otherwise uses API (faster, metadata-only).
         
         Args:
             limit: Optional limit on number of items
+            extract_fulltext: Whether to extract fulltext content
             
         Returns:
             List of items in API-compatible format
         """
-        if is_local_mode():
-            return self._get_items_from_local_db(limit)
+        if extract_fulltext and is_local_mode():
+            return self._get_items_from_local_db(limit, extract_fulltext=extract_fulltext)
         else:
             return self._get_items_from_api(limit)
     
-    def _get_items_from_local_db(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def _get_items_from_local_db(self, limit: Optional[int] = None, extract_fulltext: bool = False) -> List[Dict[str, Any]]:
         """
         Get items from local Zotero database.
         
         Args:
             limit: Optional limit on number of items
+            extract_fulltext: Whether to extract fulltext content
             
         Returns:
             List of items in API-compatible format
@@ -252,12 +271,12 @@ class ZoteroSemanticSearch:
             except Exception:
                 pass
 
-            with LocalZoteroReader(pdf_max_pages=pdf_max_pages) as reader:
+            with suppress_stdout(), LocalZoteroReader(pdf_max_pages=pdf_max_pages) as reader:
                 # Phase 1: fetch metadata only (fast)
-                print("Scanning local Zotero database for items...", flush=True)
+                sys.stderr.write("Scanning local Zotero database for items...\n")
                 local_items = reader.get_items_with_text(limit=limit, include_fulltext=False)
                 candidate_count = len(local_items)
-                print(f"Found {candidate_count} candidate items.", flush=True)
+                sys.stderr.write(f"Found {candidate_count} candidate items.\n")
 
                 # Optional deduplication: if preprint and journalArticle share a DOI/title, keep journalArticle
                 # Build index by (normalized DOI or normalized title)
@@ -311,35 +330,38 @@ class ZoteroSemanticSearch:
                 total_to_extract = len(local_items)
                 if total_to_extract != candidate_count:
                     try:
-                        print(
-                            f"After filtering/dedup: {total_to_extract} items to process. Extracting content...",
-                            flush=True,
-                        )
+                        sys.stderr.write(f"After filtering/dedup: {total_to_extract} items to process. Extracting content...\n")
                     except Exception:
                         pass
                 else:
                     try:
-                        print("Extracting content...", flush=True)
+                        sys.stderr.write("Extracting content...\n")
                     except Exception:
                         pass
 
-                # Phase 2: selectively extract fulltext only now, with lightweight progress
-                extracted = 0
-                for it in local_items:
-                    if not getattr(it, "fulltext", None):
-                        text = reader.extract_fulltext_for_item(it.item_id)
-                        if text:
-                            # Support new (text, source) return format
-                            if isinstance(text, tuple) and len(text) == 2:
-                                it.fulltext, it.fulltext_source = text[0], text[1]
-                            else:
-                                it.fulltext = text
-                    extracted += 1
-                    if extracted % 25 == 0 and total_to_extract:
-                        try:
-                            print(f"Extracted content for {extracted}/{total_to_extract} items...", flush=True)
-                        except Exception:
-                            pass
+                # Phase 2: selectively extract fulltext only when requested
+                if extract_fulltext:
+                    extracted = 0
+                    for it in local_items:
+                        if not getattr(it, "fulltext", None):
+                            text = reader.extract_fulltext_for_item(it.item_id)
+                            if text:
+                                # Support new (text, source) return format
+                                if isinstance(text, tuple) and len(text) == 2:
+                                    it.fulltext, it.fulltext_source = text[0], text[1]
+                                else:
+                                    it.fulltext = text
+                        extracted += 1
+                        if extracted % 25 == 0 and total_to_extract:
+                            try:
+                                sys.stderr.write(f"Extracted content for {extracted}/{total_to_extract} items...\n")
+                            except Exception:
+                                pass
+                else:
+                    # Skip fulltext extraction for faster processing
+                    for it in local_items:
+                        it.fulltext = None
+                        it.fulltext_source = None
                 
                 # Convert to API-compatible format
                 api_items = []
@@ -354,9 +376,9 @@ class ZoteroSemanticSearch:
                             "title": item.title or "",
                             "abstractNote": item.abstract or "",
                             "extra": item.extra or "",
-                            # Include a slice of extracted fulltext if available
-                            "fulltext": getattr(item, 'fulltext', None) or "",
-                            "fulltextSource": getattr(item, 'fulltext_source', None) or "",
+                            # Include fulltext only when extracted
+                            "fulltext": getattr(item, 'fulltext', None) or "" if extract_fulltext else "",
+                            "fulltextSource": getattr(item, 'fulltext_source', None) or "" if extract_fulltext else "",
                             "dateAdded": item.date_added,
                             "dateModified": item.date_modified,
                             "creators": self._parse_creators_string(item.creators) if item.creators else []
@@ -433,7 +455,19 @@ class ZoteroSemanticSearch:
             if limit and len(all_items) >= limit:
                 break
             
-            items = self.zotero_client.items(**batch_params)
+            try:
+                items = self.zotero_client.items(**batch_params)
+            except Exception as e:
+                if "Connection refused" in str(e):
+                    error_msg = (
+                        "Cannot connect to Zotero local API. Please ensure:\n"
+                        "1. Zotero is running\n"
+                        "2. Local API is enabled in Zotero Preferences > Advanced > Enable HTTP server\n"
+                        "3. The local API port (default 23119) is not blocked"
+                    )
+                    raise Exception(error_msg) from e
+                else:
+                    raise Exception(f"Zotero API connection error: {e}") from e
             if not items:
                 break
             
@@ -457,13 +491,15 @@ class ZoteroSemanticSearch:
     
     def update_database(self, 
                        force_full_rebuild: bool = False,
-                       limit: Optional[int] = None) -> Dict[str, Any]:
+                       limit: Optional[int] = None,
+                       extract_fulltext: bool = False) -> Dict[str, Any]:
         """
         Update the semantic search database with Zotero items.
         
         Args:
             force_full_rebuild: Whether to rebuild the entire database
             limit: Limit number of items to process (for testing)
+            extract_fulltext: Whether to extract fulltext content from local database
             
         Returns:
             Update statistics
@@ -489,13 +525,14 @@ class ZoteroSemanticSearch:
                 self.chroma_client.reset_collection()
             
             # Get all items from either local DB or API
-            all_items = self._get_items_from_source(limit=limit)
+            # Get all items from either local DB or API
+            all_items = self._get_items_from_source(limit=limit, extract_fulltext=extract_fulltext)
             
             stats["total_items"] = len(all_items)
             logger.info(f"Found {stats['total_items']} items to process")
             # Immediate progress line so users see counts up-front
             try:
-                print(f"Total items to index: {stats['total_items']}", flush=True)
+                sys.stderr.write(f"Total items to index: {stats['total_items']}\n")
             except Exception:
                 pass
             
@@ -520,13 +557,7 @@ class ZoteroSemanticSearch:
                 # Print progress every 10 seen items (even if all are skipped)
                 try:
                     while seen_items >= next_milestone and next_milestone > 0:
-                        print(
-                            f"Processed: {next_milestone}/{stats['total_items']} "
-                            f"added:{stats['added_items']} "
-                            f"skipped:{stats['skipped_items']} "
-                            f"errors:{stats['errors']}",
-                            flush=True,
-                        )
+                        sys.stderr.write(f"Processed: {next_milestone}/{stats['total_items']} added:{stats['added_items']} skipped:{stats['skipped_items']} errors:{stats['errors']}\n")
                         next_milestone += 10
                         if next_milestone > stats["total_items"]:
                             next_milestone = stats["total_items"]

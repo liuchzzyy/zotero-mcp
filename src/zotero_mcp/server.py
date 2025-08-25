@@ -4,6 +4,7 @@ Zotero MCP server implementation.
 
 from typing import Any, Dict, List, Literal, Optional, Union
 import os
+import sys
 import uuid
 import tempfile
 import asyncio
@@ -27,7 +28,7 @@ from zotero_mcp.utils import format_creators
 @asynccontextmanager
 async def server_lifespan(server: FastMCP):
     """Manage server startup and shutdown lifecycle."""
-    print("Starting Zotero MCP server...")
+    sys.stderr.write("Starting Zotero MCP server...\n")
     
     # Check for semantic search auto-update on startup
     try:
@@ -39,25 +40,25 @@ async def server_lifespan(server: FastMCP):
             search = create_semantic_search(str(config_path))
             
             if search.should_update_database():
-                print("Auto-updating semantic search database...")
+                sys.stderr.write("Auto-updating semantic search database...\n")
                 
                 # Run update in background to avoid blocking server startup
                 async def background_update():
                     try:
-                        stats = search.update_database()
-                        print(f"Database update completed: {stats.get('processed_items', 0)} items processed")
+                        stats = search.update_database(extract_fulltext=False)
+                        sys.stderr.write(f"Database update completed: {stats.get('processed_items', 0)} items processed\n")
                     except Exception as e:
-                        print(f"Background database update failed: {e}")
+                        sys.stderr.write(f"Background database update failed: {e}\n")
                 
                 # Start background task
                 asyncio.create_task(background_update())
     
     except Exception as e:
-        print(f"Warning: Could not check semantic search auto-update: {e}")
+        sys.stderr.write(f"Warning: Could not check semantic search auto-update: {e}\n")
     
     yield {}
     
-    print("Shutting down Zotero MCP server...")
+    sys.stderr.write("Shutting down Zotero MCP server...\n")
 
 
 # Create an MCP server with appropriate dependencies
@@ -1870,10 +1871,11 @@ def update_search_database(
         # Create semantic search instance
         search = create_semantic_search(str(config_path))
         
-        # Perform update
+        # Perform update with no fulltext extraction (for speed)
         stats = search.update_database(
             force_full_rebuild=force_rebuild,
-            limit=limit
+            limit=limit,
+            extract_fulltext=False
         )
         
         # Format results

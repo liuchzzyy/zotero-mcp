@@ -7,6 +7,8 @@ for semantic search over Zotero libraries.
 
 import json
 import os
+import sys
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import logging
@@ -16,6 +18,18 @@ from chromadb import Documents, EmbeddingFunction, Embeddings
 from chromadb.config import Settings
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def suppress_stdout():
+    """Context manager to suppress stdout temporarily."""
+    with open(os.devnull, 'w') as devnull:
+        old_stdout = sys.stdout
+        sys.stdout = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
 
 
 class OpenAIEmbeddingFunction(EmbeddingFunction):
@@ -113,40 +127,42 @@ class ChromaClient:
         
         self.persist_directory = persist_directory
         
-        # Initialize ChromaDB client
-        self.client = chromadb.PersistentClient(
-            path=self.persist_directory,
-            settings=Settings(
-                anonymized_telemetry=False,
-                allow_reset=True
+        # Initialize ChromaDB client with stdout suppression
+        with suppress_stdout():
+            self.client = chromadb.PersistentClient(
+                path=self.persist_directory,
+                settings=Settings(
+                    anonymized_telemetry=False,
+                    allow_reset=True
+                )
             )
-        )
-        
-        # Set up embedding function
-        self.embedding_function = self._create_embedding_function()
-        
-        # Get or create collection with embedding function handling
-        try:
-            # Try to get existing collection first
-            self.collection = self.client.get_collection(name=self.collection_name)
             
-            # Check if embedding functions are compatible
-            existing_ef = getattr(self.collection, '_embedding_function', None)
-            if existing_ef is not None:
-                existing_name = getattr(existing_ef, 'name', lambda: 'default')()
-                new_name = getattr(self.embedding_function, 'name', lambda: 'default')()
+            # Set up embedding function
+            self.embedding_function = self._create_embedding_function()
+            
+            # Get or create collection with embedding function handling
+            try:
+                # Try to get existing collection first
+                self.collection = self.client.get_collection(name=self.collection_name)
                 
-                if existing_name != new_name:
-                    logger.warning(f"Collection exists with different embedding function: {existing_name} vs {new_name}")
-                    # Use the existing collection's embedding function to avoid conflicts
-                    self.embedding_function = existing_ef
-            
-        except Exception:
-            # Collection doesn't exist, create it
-            self.collection = self.client.create_collection(
-                name=self.collection_name,
-                embedding_function=self.embedding_function
-            )
+                # Check if embedding functions are compatible
+                existing_ef = getattr(self.collection, '_embedding_function', None)
+                if existing_ef is not None:
+                    existing_name = getattr(existing_ef, 'name', lambda: 'default')()
+                    new_name = getattr(self.embedding_function, 'name', lambda: 'default')()
+                    
+                    if existing_name != new_name:
+                        # Log to stderr instead of letting ChromaDB print to stdout
+                        sys.stderr.write(f"ChromaDB: Collection exists with different embedding function: {existing_name} vs {new_name}\n")
+                        # Use the existing collection's embedding function to avoid conflicts
+                        self.embedding_function = existing_ef
+                
+            except Exception:
+                # Collection doesn't exist, create it
+                self.collection = self.client.create_collection(
+                    name=self.collection_name,
+                    embedding_function=self.embedding_function
+                )
     
     def _create_embedding_function(self) -> EmbeddingFunction:
         """Create the appropriate embedding function based on configuration."""
