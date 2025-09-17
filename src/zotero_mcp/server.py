@@ -2074,22 +2074,49 @@ def connector_fetch(
             data = {}
 
         title = data.get("title", f"Zotero Item {item_key}")
-        url = f"zotero://select/items/{item_key}"
+        zotero_url = f"zotero://select/items/{item_key}"
+        # Prefer web URL for connectors; fall back to zotero:// if unknown
+        lib_type = (os.getenv("ZOTERO_LIBRARY_TYPE", "user") or "user").lower()
+        lib_id = os.getenv("ZOTERO_LIBRARY_ID", "")
+        if lib_type not in ["user", "group"]:
+            lib_type = "user"
+        web_url = f"https://www.zotero.org/{'users' if lib_type=='user' else 'groups'}/{lib_id}/items/{item_key}" if lib_id else ""
+        url = web_url or zotero_url
 
         # Use existing tool to get best-effort fulltext/markdown
         text_md = get_item_fulltext(item_key=item_key, ctx=ctx)
+        # Extract the actual full text section if present, else keep as-is
+        text_clean = text_md
+        try:
+            marker = "## Full Text"
+            pos = text_md.find(marker)
+            if pos >= 0:
+                text_clean = text_md[pos + len(marker):].lstrip("\n #")
+        except Exception:
+            pass
+        if (not text_clean or len(text_clean.strip()) < 40) and data:
+            abstract = data.get("abstractNote", "")
+            creators = data.get("creators", [])
+            byline = format_creators(creators)
+            text_clean = (f"{title}\n\n" + (f"Authors: {byline}\n" if byline else "") +
+                          (f"Abstract:\n{abstract}" if abstract else "")) or text_md
 
         metadata = {
             "itemType": data.get("itemType", ""),
             "date": data.get("date", ""),
             "key": item_key,
+            "doi": data.get("DOI", ""),
+            "authors": format_creators(data.get("creators", [])),
+            "tags": [t.get("tag", "") for t in (data.get("tags", []) or [])],
+            "zotero_url": zotero_url,
+            "web_url": web_url,
             "source": "zotero-mcp"
         }
 
         return json.dumps({
             "id": item_key,
             "title": title,
-            "text": text_md,
+            "text": text_clean,
             "url": url,
             "metadata": metadata
         }, separators=(",", ":"))
