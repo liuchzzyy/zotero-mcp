@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-01-20
+
+### 🚀 Enhancements
+
+#### Performance & Compatibility
+- **Batch Operation Support**: New `zotero_batch_get_metadata` tool for retrieving multiple items in a single call.
+- **Response Caching Layer**: Added in-memory caching for read-only tools (default TTL: 5 minutes) to improve performance.
+- **Response Converter**: Added backward compatibility layer to convert structured responses to legacy formats (markdown/JSON).
+- **Performance Monitoring**: Added metrics collection for tool usage and duration.
+- **Streaming Support**: Added utilities for streaming large result sets.
+
+#### New Tools
+- `zotero_batch_get_metadata`: Retrieve metadata for up to 50 items at once.
+
 ## [2.0.0] - 2026-01-20
 
 ### 🎉 Major Release - MCP Standardization
