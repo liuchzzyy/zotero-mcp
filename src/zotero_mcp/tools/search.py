@@ -21,6 +21,8 @@ from zotero_mcp.models.search import (
     RecentItemsInput,
 )
 from zotero_mcp.services import get_data_service
+from zotero_mcp.utils.cache import cached_tool
+from zotero_mcp.utils.metrics import monitored_tool
 
 
 def register_search_tools(mcp: FastMCP) -> None:
@@ -36,6 +38,7 @@ def register_search_tools(mcp: FastMCP) -> None:
             openWorldHint=False,
         ),
     )
+    @cached_tool(ttl_seconds=300)
     async def zotero_search(params: SearchItemsInput, ctx: Context) -> SearchResponse:
         """
         Search for items in your Zotero library by keywords.
@@ -358,6 +361,7 @@ def register_search_tools(mcp: FastMCP) -> None:
             openWorldHint=False,
         ),
     )
+    @monitored_tool
     async def zotero_semantic_search(
         params: SemanticSearchInput, ctx: Context
     ) -> SearchResponse:

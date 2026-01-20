@@ -10,6 +10,7 @@ from .search import register_search_tools
 from .items import register_item_tools
 from .annotations import register_annotation_tools
 from .database import register_database_tools
+from .batch import register_batch_tools
 
 
 def register_all_tools(mcp: FastMCP) -> None:
@@ -23,6 +24,7 @@ def register_all_tools(mcp: FastMCP) -> None:
     register_item_tools(mcp)
     register_annotation_tools(mcp)
     register_database_tools(mcp)
+    register_batch_tools(mcp)
 
 
 __all__ = [
@@ -31,4 +33,5 @@ __all__ = [
     "register_item_tools",
     "register_annotation_tools",
     "register_database_tools",
+    "register_batch_tools",
 ]
