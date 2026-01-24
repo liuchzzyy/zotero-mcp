@@ -58,7 +58,7 @@ def find_executable():
 
 
 def setup_semantic_search(
-    existing_semantic_config: dict = None, semantic_config_only_arg: bool = False
+    existing_semantic_config: dict | None = None, semantic_config_only_arg: bool = False
 ) -> dict:
     """Interactive setup for semantic search configuration."""
     print("\n=== Semantic Search Configuration ===")

@@ -127,6 +127,13 @@ def load_config() -> dict[str, Any]:
     client_env = standalone.get("client_env", {})
     env_config.update(client_env)
 
+    # Apply environment variables (highest priority)
+    # We scan for relevant keys to include in the returned config
+    relevant_prefixes = ["ZOTERO_", "OPENAI_", "GEMINI_", "DEEPSEEK_"]
+    for key, value in os.environ.items():
+        if any(key.startswith(prefix) for prefix in relevant_prefixes):
+            env_config[key] = value
+
     # Apply to os.environ for backward compatibility,
     # but don't override existing env vars
     for key, value in env_config.items():
