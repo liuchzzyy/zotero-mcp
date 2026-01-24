@@ -284,7 +284,7 @@ def verify_installation() -> tuple[bool, str]:
         # Try to import the module
 
         # Try to get version
-        from zotero_mcp._version import __version__
+        from zotero_mcp import __version__
 
         # Try to run a basic command
         result = subprocess.run(

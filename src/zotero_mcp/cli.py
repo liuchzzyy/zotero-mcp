@@ -305,7 +305,8 @@ def main():
                 ),
             )
 
-            for i, meta in enumerate(results["metadatas"]):
+            metadatas = results.get("metadatas") or []
+            for i, meta in enumerate(metadatas):
                 print(f"- {meta.get('title', 'Untitled')}")
                 if args.show_documents and results["documents"]:
                     print(f"  {results['documents'][i][:100]}...")
