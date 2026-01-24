@@ -105,6 +105,10 @@ class BatchAnalyzeInput(BaseInput):
         default=None,
         description="Specific model to use (overrides default)",
     )
+    template: str | None = Field(
+        default=None,
+        description="Custom analysis template/instruction (Markdown)",
+    )
     dry_run: bool = Field(
         default=False,
         description="If true, only preview analysis without creating notes",

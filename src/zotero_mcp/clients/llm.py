@@ -203,6 +203,7 @@ class LLMClient:
         doi: str | None,
         fulltext: str,
         annotations: list[dict[str, Any]] | None = None,
+        template: str | None = None,
     ) -> str:
         """
         Analyze a research paper and generate structured notes.
@@ -215,6 +216,7 @@ class LLMClient:
             doi: DOI
             fulltext: Full text content
             annotations: PDF annotations
+            template: Custom analysis template/instruction
 
         Returns:
             Markdown-formatted analysis
@@ -241,15 +243,49 @@ class LLMClient:
                 annotations_section += "\n"
 
         # Build prompt
-        prompt = ANALYSIS_TEMPLATE.format(
-            title=title or "未知",
-            authors=authors or "未知",
-            journal=journal or "未知",
-            date=date or "未知",
-            doi=doi or "未知",
-            fulltext=fulltext[:50000],  # Limit to ~50k chars
-            annotations_section=annotations_section,
-        )
+        if template:
+            # Use custom template strategy
+            prompt = f"""你是一位专业的科研文献分析助手。请仔细阅读以下论文内容，并按照提供的模板结构进行分析。
+
+## 论文基本信息
+
+- **标题**: {title or "未知"}
+- **作者**: {authors or "未知"}
+- **期刊**: {journal or "未知"}
+- **发表日期**: {date or "未知"}
+- **DOI**: {doi or "未知"}
+
+## 论文全文
+
+{fulltext[:50000]}
+
+{annotations_section}
+
+---
+
+## 分析要求
+
+请阅读上述内容，并严格按照以下模板格式生成分析报告：
+
+{template}
+
+**注意事项**:
+1. 请保持客观、专业的分析风格
+2. 使用中文撰写分析内容
+3. 如果模板中有占位符(如 ${{...}})，请替换为实际分析内容
+4. 尽量提取具体的数据、方法和结论
+"""
+        else:
+            # Use default template
+            prompt = ANALYSIS_TEMPLATE.format(
+                title=title or "未知",
+                authors=authors or "未知",
+                journal=journal or "未知",
+                date=date or "未知",
+                doi=doi or "未知",
+                fulltext=fulltext[:50000],  # Limit to ~50k chars
+                annotations_section=annotations_section,
+            )
 
         # Call LLM
         if self.config["api_style"] == "openai":
