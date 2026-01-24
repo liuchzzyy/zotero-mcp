@@ -160,6 +160,7 @@ def register_workflow_tools(mcp: FastMCP) -> None:
                 include_annotations=params.include_annotations,
                 llm_provider=params.llm_provider,
                 llm_model=params.llm_model,
+                template=params.template,
                 dry_run=params.dry_run,
                 progress_callback=progress_callback,
             )

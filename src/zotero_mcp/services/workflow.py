@@ -161,6 +161,7 @@ class WorkflowService:
         include_annotations: bool = True,
         llm_provider: str = "auto",
         llm_model: str | None = None,
+        template: str | None = None,
         dry_run: bool = False,
         progress_callback: Callable | None = None,
     ) -> BatchAnalyzeResponse:
@@ -178,6 +179,7 @@ class WorkflowService:
             include_annotations: Include PDF annotations
             llm_provider: LLM provider to use
             llm_model: Model name (optional)
+            template: Custom analysis template
             dry_run: Preview only, don't create notes
             progress_callback: Progress update callback
 
@@ -283,6 +285,7 @@ class WorkflowService:
                 llm_client=llm_client,
                 include_annotations=include_annotations,
                 skip_existing=skip_existing,
+                template=template,
                 dry_run=dry_run,
             )
 
@@ -325,6 +328,7 @@ class WorkflowService:
         llm_client: Any,
         include_annotations: bool,
         skip_existing: bool,
+        template: str | None,
         dry_run: bool,
     ) -> ItemAnalysisResult:
         """Analyze a single item."""
@@ -373,6 +377,7 @@ class WorkflowService:
                 doi=item.doi,
                 fulltext=fulltext,
                 annotations=annotations,
+                template=template,
             )
 
             if not markdown_note:
