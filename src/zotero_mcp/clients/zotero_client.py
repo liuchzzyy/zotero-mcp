@@ -444,6 +444,77 @@ class ZoteroAPIClient:
             None, lambda: self.client.addto_collection(collection_key, item)
         )
 
+    async def create_collection(
+        self, name: str, parent_key: str | None = None
+    ) -> dict[str, Any]:
+        """
+        Create a new collection.
+
+        Args:
+            name: Collection name
+            parent_key: Parent collection key (optional)
+
+        Returns:
+            Created collection data
+        """
+        loop = asyncio.get_event_loop()
+        collection = {"name": name}
+        if parent_key:
+            collection["parentCollection"] = parent_key
+
+        return await loop.run_in_executor(
+            None, lambda: self.client.create_collections([collection])
+        )
+
+    async def update_collection(
+        self,
+        collection_key: str,
+        name: str | None = None,
+        parent_key: str | None = None,
+    ) -> None:
+        """
+        Update a collection (rename or move).
+
+        Args:
+            collection_key: Collection key to update
+            name: New name (optional)
+            parent_key: New parent key (optional, use "" to move to root)
+        """
+        loop = asyncio.get_event_loop()
+
+        # Fetch current data to get version
+        coll_data = await loop.run_in_executor(
+            None, lambda: self.client.collection(collection_key)
+        )
+
+        data = coll_data.get("data", {})
+        if name:
+            data["name"] = name
+        if parent_key is not None:
+            # Zotero API uses False for root
+            data["parentCollection"] = parent_key if parent_key else False
+
+        coll_data["data"] = data
+
+        await loop.run_in_executor(
+            None, lambda: self.client.update_collection(coll_data)
+        )
+
+    async def delete_collection(self, collection_key: str) -> None:
+        """
+        Delete a collection.
+
+        Args:
+            collection_key: Collection key to delete
+        """
+        loop = asyncio.get_event_loop()
+        coll_data = await loop.run_in_executor(
+            None, lambda: self.client.collection(collection_key)
+        )
+        await loop.run_in_executor(
+            None, lambda: self.client.delete_collection(coll_data)
+        )
+
     async def remove_from_collection(
         self, collection_key: str, item_key: str
     ) -> dict[str, Any]:

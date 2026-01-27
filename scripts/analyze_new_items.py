@@ -39,8 +39,8 @@ logger = logging.getLogger(__name__)
 
 
 # Configuration
-SOURCE_COLLECTION_NAME = "0 - 收集暂存：超短期"
-DEST_COLLECTION_NAME = "1 - 中转过滤：较短期"
+SOURCE_COLLECTION_NAME = "00_INBOXS"
+DEST_COLLECTION_NAME = "01_SHORTTERMS"
 MAX_ITEMS = None  # None = process all items
 
 
