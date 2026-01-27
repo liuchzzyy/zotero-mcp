@@ -54,6 +54,12 @@
 - **Dual modes** - Preview data first or run fully automatic batch analysis
 - See [examples/workflow_example.py](./examples/workflow_example.py) for a complete usage example
 
+### 📰 RSS Feed Integration (NEW)
+- **Automated Fetching** - Fetch RSS feeds daily via GitHub Actions
+- **OPML Support** - Import feeds from OPML files
+- **Smart Import** - Automatically import new articles to your Zotero Inbox
+- **Deduplication** - Avoid duplicate entries with URL checking
+
 ### 🎯 Structured Output
 - **Type-safe responses** - All tools return structured Pydantic models
 - **Consistent error handling** - Standard `success`/`error` fields across all tools
@@ -314,6 +320,10 @@ The first time you use PDF annotation features, the necessary tools will be auto
 - `zotero_resume_workflow`: Resume interrupted batch analysis workflows
 - `zotero_list_workflows`: View all workflow states and progress
 - `zotero_find_collection`: Find collections by name with fuzzy matching
+
+### 📰 RSS Tools
+- `rss_fetch_feed`: Fetch and parse a single RSS feed
+- `rss_fetch_from_opml`: Fetch multiple feeds from an OPML file
 
 ## 📖 Documentation
 

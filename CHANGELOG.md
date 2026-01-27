@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### 🚀 Enhancements
+
+#### RSS Feed Integration
+- **Automated RSS Fetching**: New `fetch-rss` GitHub Actions job scheduled daily at 5:00 AM CST.
+- **OPML Support**: Ability to import feeds from OPML files (`RSS/RSS_official.opml`).
+- **Auto-Import**: Automatically imports new articles (last 7 days) to Zotero staging collection.
+- **Deduplication**: Prevents duplicate imports based on article URL.
+- **New Tools**:
+  - `rss_fetch_feed`: Fetch and parse a single RSS feed.
+  - `rss_fetch_from_opml`: Fetch multiple feeds from an OPML file.
+
+### 🔧 Changed
+
+- **Project Structure**: Moved automation scripts from `scripts/` to `src/scripts/` for better organization.
+- **Workflow Schedule**: Updated automated workflow to include RSS fetching before analysis.
+- **Dependencies**: Added `feedparser`, `beautifulsoup4`, `lxml`, and `tenacity`.
+
 ## [2.1.0] - 2026-01-20
 
 ### 🚀 Enhancements
