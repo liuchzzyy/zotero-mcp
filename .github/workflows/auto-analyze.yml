@@ -82,6 +82,7 @@ jobs:
       
       - name: Notify on Failure
         if: failure()
+        continue-on-error: true  # Don't fail workflow if Issues are disabled
         uses: actions/github-script@v7
         with:
           script: |
@@ -147,6 +148,7 @@ jobs:
       
       - name: Notify on Failure
         if: failure()
+        continue-on-error: true  # Don't fail workflow if Issues are disabled
         uses: actions/github-script@v7
         with:
           script: |
@@ -211,6 +213,7 @@ jobs:
       
       - name: Notify on Failure
         if: failure()
+        continue-on-error: true  # Don't fail workflow if Issues are disabled
         uses: actions/github-script@v7
         with:
           script: |
@@ -275,6 +278,7 @@ jobs:
       
       - name: Notify on Failure
         if: failure()
+        continue-on-error: true  # Don't fail workflow if Issues are disabled
         uses: actions/github-script@v7
         with:
           script: |
