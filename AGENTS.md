@@ -36,8 +36,10 @@ uv run ruff format     # Format
   - `data_access.py`: Unified data layer (Local/Web/BibTeX)
   - `workflow.py`: Batch analysis engine (supports Checkpoints)
   - `semantic.py`: Vector search logic
+  - `rss/`: RSS feed fetching and parsing service
 - **Clients**: `src/zotero_mcp/clients/` (Zotero API, ChromaDB, LLM adapters)
 - **Models**: `src/zotero_mcp/models/` (Pydantic models for type safety)
+- **Scripts**: `src/scripts/` (Automation scripts for GitHub Actions)
 - **Examples**: `examples/` (Usage examples and integration patterns)
   - `workflow_example.py`: Production-grade batch analysis example
 
@@ -69,6 +71,9 @@ uv run ruff format     # Format
   - Supports **Custom Templates** (via `template` parameter).
   - Supports **Local LLMs** (via `OPENAI_BASE_URL`).
   - Uses Checkpoint system for resumption.
+- **RSS Integration**:
+  - Automated feed fetching from OPML.
+  - Smart deduplication and Zotero import.
 - **PDF Annotations**: 
   - Extraction via Better BibTeX (preferred) or direct PDF parsing.
 
