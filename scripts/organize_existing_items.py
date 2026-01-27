@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 # Configuration
-EXCLUDED_COLLECTION_NAME = "0 - 收集暂存：超短期"  # Don't process items here
+EXCLUDED_COLLECTION_NAME = "00_INBOXS"  # Don't process items here
 TAG_TO_ADD = "AI分析"  # Tag to add after successful analysis
 MAX_ITEMS = None  # None = process all items
 

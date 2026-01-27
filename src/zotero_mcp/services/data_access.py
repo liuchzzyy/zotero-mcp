@@ -282,6 +282,25 @@ class DataAccessService:
         """Get all collections."""
         return await self.api_client.get_collections()
 
+    async def create_collection(
+        self, name: str, parent_key: str | None = None
+    ) -> dict[str, Any]:
+        """Create a new collection."""
+        return await self.api_client.create_collection(name, parent_key)
+
+    async def delete_collection(self, collection_key: str) -> None:
+        """Delete a collection."""
+        await self.api_client.delete_collection(collection_key)
+
+    async def update_collection(
+        self,
+        collection_key: str,
+        name: str | None = None,
+        parent_key: str | None = None,
+    ) -> None:
+        """Update a collection (rename or move)."""
+        await self.api_client.update_collection(collection_key, name, parent_key)
+
     async def get_collection_items(
         self,
         collection_key: str,
