@@ -214,6 +214,8 @@ class ZoteroAPIClient:
         """
         Get full-text content for an item.
 
+        If the item is a parent, attempts to find the PDF attachment first.
+
         Args:
             item_key: Item key
 
@@ -221,16 +223,48 @@ class ZoteroAPIClient:
             Full-text content if available
         """
         loop = asyncio.get_event_loop()
+
+        # Helper to fetch text for a specific key
+        async def fetch_text(key: str) -> str | None:
+            try:
+                result = await loop.run_in_executor(
+                    None,
+                    lambda: self.client.fulltext_item(key),
+                )
+                if isinstance(result, dict):
+                    return result.get("content", "")
+                return str(result) if result else None
+            except Exception:
+                return None
+
+        # 1. Try direct fetch (works if item_key IS the attachment)
+        text = await fetch_text(item_key)
+        if text:
+            return text
+
+        # 2. If no text, assume it might be a parent item and look for PDF attachment
         try:
-            result = await loop.run_in_executor(
-                None,
-                lambda: self.client.fulltext_item(item_key),
-            )
-            if isinstance(result, dict):
-                return result.get("content", "")
-            return str(result) if result else None
+            # Get item children
+            children = await self.get_item_children(item_key)
+            pdf_key = None
+
+            # Find PDF attachment
+            for child in children:
+                data = child.get("data", {})
+                if (
+                    data.get("itemType") == "attachment"
+                    and data.get("contentType") == "application/pdf"
+                ):
+                    pdf_key = data.get("key")
+                    break
+
+            if pdf_key:
+                return await fetch_text(pdf_key)
+
         except Exception:
-            return None
+            pass
+
+        return None
 
     # -------------------- Collection Methods --------------------
 
