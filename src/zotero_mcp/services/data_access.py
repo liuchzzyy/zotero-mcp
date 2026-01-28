@@ -68,6 +68,23 @@ class DataAccessService:
         self._item_service: ItemService | None = None
         self._search_service: SearchService | None = None
 
+        # Validate configuration
+        self._validate_config()
+
+    def _validate_config(self) -> None:
+        """Validate configuration settings."""
+        if not is_local_mode():
+            # Check for API key and Library ID in web mode
+            import os
+
+            api_key = os.getenv("ZOTERO_API_KEY")
+            library_id = os.getenv("ZOTERO_LIBRARY_ID")
+
+            if not api_key:
+                logger.warning("ZOTERO_API_KEY is missing. Web API calls will fail.")
+            if not library_id:
+                logger.warning("ZOTERO_LIBRARY_ID is missing. Web API calls will fail.")
+
     @property
     def api_client(self) -> ZoteroAPIClient:
         """Get or create API client."""
