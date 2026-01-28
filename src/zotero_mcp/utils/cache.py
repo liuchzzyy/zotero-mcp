@@ -88,12 +88,12 @@ def cached_tool(ttl_seconds: int | None = None):
             # Try to get from cache
             try:
                 # params is a Pydantic model, use model_dump()
-                params_dict = params.model_dump()
+                params_dict: dict[str, Any] | str = params.model_dump()
             except AttributeError:
                 # fallback if params is a dict (unlikely with FastMCP but possible)
                 params_dict = params if isinstance(params, dict) else str(params)
 
-            cached_response = cache.get(tool_name, params_dict)
+            cached_response = cache.get(tool_name, params_dict)  # type: ignore[arg-type]
             if cached_response is not None:
                 await ctx.info(f"Cache hit for {tool_name}")
                 return cached_response
@@ -104,7 +104,7 @@ def cached_tool(ttl_seconds: int | None = None):
             # Cache successful responses
             # Check for 'success' attribute (BaseResponse)
             if getattr(response, "success", True):
-                cache.set(tool_name, params_dict, response)
+                cache.set(tool_name, params_dict, response)  # type: ignore[arg-type]
 
             return response
 

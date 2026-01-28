@@ -247,7 +247,7 @@ class BetterBibTeXClient:
         try:
             params = [[citekey], TRANSLATOR_CSL_JSON]
             if library_id is not None:
-                params.append(library_id)  # type: ignore
+                params.append(library_id)
 
             result = self._make_request("item.export", params)
 

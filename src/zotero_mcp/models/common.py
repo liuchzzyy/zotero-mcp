@@ -102,6 +102,16 @@ class SearchResultItem(ZoteroItemResult):
     matched_text: str | None = Field(
         default=None, description="Text snippet that matched the query"
     )
+    # Extended fields for note search
+    creators: list[str] = Field(
+        default_factory=list, description="List of creator names"
+    )
+    year: int | None = Field(default=None, description="Publication year")
+    date_added: str | None = Field(default=None, description="Date item was added")
+    snippet: str | None = Field(
+        default=None, description="Context snippet for search result"
+    )
+    raw_data: dict | None = Field(default=None, description="Raw match data")
 
 
 # ===== Response Models =====
@@ -138,6 +148,13 @@ class SearchResponse(PaginatedResponse):
     query: str = Field(..., description="Search query that was executed")
     items: list[SearchResultItem] = Field(
         default_factory=list, description="Search results"
+    )
+    # Alias for 'items' used in note search
+    results: list[SearchResultItem] = Field(
+        default_factory=list, description="Search results (alias for items)"
+    )
+    total_count: int | None = Field(
+        default=None, description="Total matching items before pagination"
     )
 
 
@@ -187,9 +204,16 @@ class AnnotationsResponse(BaseResponse):
 
     item_key: str = Field(..., description="Parent item key")
     count: int = Field(..., description="Number of annotations")
+    total_count: int | None = Field(
+        default=None, description="Total number of annotations before pagination"
+    )
     annotations: list[AnnotationItem] = Field(
         default_factory=list, description="List of annotations"
     )
+    has_more: bool = Field(
+        default=False, description="Whether more results are available"
+    )
+    next_offset: int | None = Field(default=None, description="Offset for next page")
 
 
 class NotesResponse(BaseResponse):
@@ -197,7 +221,14 @@ class NotesResponse(BaseResponse):
 
     item_key: str = Field(..., description="Parent item key")
     count: int = Field(..., description="Number of notes")
+    total_count: int | None = Field(
+        default=None, description="Total number of notes before pagination"
+    )
     notes: list[dict] = Field(default_factory=list, description="List of notes")
+    has_more: bool = Field(
+        default=False, description="Whether more results are available"
+    )
+    next_offset: int | None = Field(default=None, description="Offset for next page")
 
 
 # ===== Collection Models =====
@@ -259,6 +290,7 @@ class DatabaseStatusResponse(BaseResponse):
     update_frequency: str = Field(
         default="manual", description="Update frequency setting"
     )
+    message: str | None = Field(default=None, description="Status message")
 
 
 class DatabaseUpdateResponse(BaseResponse):
@@ -276,6 +308,7 @@ class DatabaseUpdateResponse(BaseResponse):
     fulltext_included: bool = Field(
         default=False, description="Whether full-text was indexed"
     )
+    message: str | None = Field(default=None, description="Status message")
 
 
 # ===== Note Creation Models =====

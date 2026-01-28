@@ -103,8 +103,7 @@ def handle_error(
 
     if "403" in error_str or "forbidden" in error_str:
         return (
-            "Error: Access denied. "
-            "You don't have permission to access this resource."
+            "Error: Access denied. You don't have permission to access this resource."
         )
 
     if "404" in error_str or "not found" in error_str:

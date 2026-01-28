@@ -114,7 +114,7 @@ class ResponseConverter:
         # Default: return message field if exists (not standard in BaseResponse) or JSON
         # BaseResponse doesn't have 'message', but subclasses might
         if hasattr(response, "message") and response.message:
-            return response.message
+            return str(response.message)
 
         return response.model_dump_json(indent=2)
 
