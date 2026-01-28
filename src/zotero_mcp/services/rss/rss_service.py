@@ -248,7 +248,9 @@ class RSSService:
                 "title": cleaned_title,
                 "url": rss_item.link,
                 "publicationTitle": rss_item.source_title,
-                "date": rss_item.pub_date.strftime("%Y-%m-%d") if rss_item.pub_date else "",
+                "date": rss_item.pub_date.strftime("%Y-%m-%d")
+                if rss_item.pub_date
+                else "",
                 "accessDate": datetime.now().strftime("%Y-%m-%d"),
                 "collections": [collection_key],
                 "DOI": doi or "",
@@ -315,7 +317,13 @@ class RSSService:
 
         all_items = []
         for feed in feeds:
-            all_items.extend([i for i in feed.items if not i.pub_date or i.pub_date >= cutoff])
+            all_items.extend(
+                [
+                    i
+                    for i in feed.items
+                    if not i.pub_date or (cutoff is None or i.pub_date >= cutoff)
+                ]
+            )
 
         if not all_items:
             logger.info("No recent items found")
@@ -334,5 +342,7 @@ class RSSService:
             if dry_run:
                 logger.info(f"[DRY RUN] Would import: {item.title}")
                 continue
-            await self.create_zotero_item(data_service, metadata_service, item, collection_key)
+            await self.create_zotero_item(
+                data_service, metadata_service, item, collection_key
+            )
             await asyncio.sleep(0.5)
