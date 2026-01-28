@@ -140,7 +140,7 @@ async def filter_items_for_analysis(data_service, items):
             logger.info(f"  ✗ {item_title[:50]} - No PDF, skipping")
             continue
 
-        items_to_analyze.append(raw_item)
+        items_to_analyze.append(item)
         logger.info(f"  ✓ {item_title[:50]} - Ready for analysis")
 
     logger.info(
@@ -337,7 +337,7 @@ async def main():
             # Note: WorkflowService doesn't return individual item results,
             # so we move all items that were in the batch
             processed_item_keys = [
-                item.get("key", "") for item in items_to_process[: result.processed]
+                item.key for item in items_to_process[: result.processed]
             ]
 
             await move_items_to_collection(

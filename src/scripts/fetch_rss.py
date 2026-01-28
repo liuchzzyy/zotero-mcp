@@ -115,7 +115,7 @@ async def create_zotero_item_from_rss(
         log_title = cleaned_title
 
         # 1. Check if item already exists by URL
-        existing_by_url = await data_service.search_items(query=rss_item.link, limit=1)
+        existing_by_url = await data_service.search_items(query=rss_item.link, limit=1, qmode="everything")
         if existing_by_url and len(existing_by_url) > 0:
             logger.info(f"  ⊘ Duplicate (URL): {cleaned_title[:50]}")
             return None
@@ -127,7 +127,7 @@ async def create_zotero_item_from_rss(
         )
         if existing_by_title and len(existing_by_title) > 0:
             # Verify exact title match to avoid partial matches
-            found_title = existing_by_title[0].get("data", {}).get("title", "")
+            found_title = existing_by_title[0].title
             if found_title.lower() == cleaned_title.lower():
                 logger.info(f"  ⊘ Duplicate (Title): {cleaned_title[:50]}")
                 return None
