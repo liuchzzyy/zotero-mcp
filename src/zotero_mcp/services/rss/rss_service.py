@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import re
 import time
@@ -312,9 +312,6 @@ class RSSService:
 
         # Collect and filter by date
         cutoff = datetime.now() - timedelta(days=days_back) if days_back else None
-        # Note: timedelta is not imported, need to fix
-        from datetime import timedelta
-        cutoff = datetime.now() - timedelta(days=days_back)
 
         all_items = []
         for feed in feeds:
