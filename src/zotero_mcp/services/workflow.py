@@ -532,46 +532,6 @@ class WorkflowService:
             logger.warning(f"Unknown source: {source}")
             return []
 
-    async def _get_items(
-        self,
-        source: str,
-        collection_key: str | None,
-        collection_name: str | None,
-        days: int,
-        limit: int,
-    ) -> list[Any]:
-        """Get items based on source."""
-        if source == "collection":
-            # Find collection
-            if collection_name and not collection_key:
-                matches = await self.data_service.find_collection_by_name(
-                    collection_name
-                )
-                if not matches:
-                    logger.warning(f"Collection not found: {collection_name}")
-                    return []
-                # Use best match
-                collection_key = matches[0].get("data", {}).get("key")
-
-            if not collection_key:
-                logger.warning("No collection key provided")
-                return []
-
-            # Get items in collection
-            items = await self.data_service.get_collection_items(
-                collection_key, limit=limit
-            )
-            return items
-
-        elif source == "recent":
-            # Get recent items
-            items = await self.data_service.get_recent_items(limit=limit, days=days)
-            return items
-
-        else:
-            logger.warning(f"Unknown source: {source}")
-            return []
-
 
 # -------------------- Singleton Instance --------------------
 
