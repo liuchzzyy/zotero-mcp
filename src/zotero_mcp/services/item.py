@@ -1,0 +1,308 @@
+"""
+Item and Collection Service.
+
+Handles CRUD operations for Zotero items, collections, and tags.
+"""
+
+import logging
+from typing import Any
+
+from zotero_mcp.clients.better_bibtex import BetterBibTeXClient
+from zotero_mcp.clients.local_db import LocalDatabaseClient, ZoteroItem
+from zotero_mcp.clients.zotero_client import ZoteroAPIClient
+from zotero_mcp.formatters import BibTeXFormatter
+from zotero_mcp.models.common import SearchResultItem
+from zotero_mcp.utils.cache import ResponseCache
+from zotero_mcp.utils.helpers import format_creators
+
+logger = logging.getLogger(__name__)
+
+
+class ItemService:
+    """
+    Service for managing Zotero items, collections, and tags.
+    """
+
+    def __init__(
+        self,
+        api_client: ZoteroAPIClient,
+        local_client: LocalDatabaseClient | None = None,
+        bibtex_client: BetterBibTeXClient | None = None,
+    ):
+        """
+        Initialize ItemService.
+
+        Args:
+            api_client: Zotero API client
+            local_client: Local database client (optional)
+            bibtex_client: Better BibTeX client (optional)
+        """
+        self.api_client = api_client
+        self.local_client = local_client
+        self.bibtex_client = bibtex_client
+        self._bibtex_formatter = BibTeXFormatter()
+        # Internal cache for slow, infrequent changing data (collections, tags)
+        self._cache = ResponseCache(ttl_seconds=300)
+
+    # -------------------- Item Operations --------------------
+
+    async def get_item(self, item_key: str) -> dict[str, Any]:
+        """Get item by key."""
+        return await self.api_client.get_item(item_key)
+
+    async def get_item_children(
+        self, item_key: str, item_type: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Get child items (attachments, notes)."""
+        return await self.api_client.get_item_children(item_key, item_type)
+
+    async def get_fulltext(self, item_key: str) -> str | None:
+        """Get full-text content for an item."""
+        # Try API first (existing behavior)
+        result = await self.api_client.get_fulltext(item_key)
+        if result:
+            return result
+
+        # Fallback to local extraction if available
+        if self.local_client:
+            logger.info(f"API fulltext empty, trying local extraction for {item_key}")
+            local_result = self.local_client.get_fulltext_by_key(item_key)
+            if local_result:
+                text, source = local_result
+                logger.info(f"Local extraction succeeded from {source}")
+                return text
+            logger.warning(f"Local extraction also failed for {item_key}")
+
+        return None
+
+    # -------------------- Collection Operations --------------------
+
+    async def get_collections(self) -> list[dict[str, Any]]:
+        """Get all collections."""
+        # Check cache first
+        cache_key = "collections_list"
+        cached = self._cache.get("get_collections", {"key": cache_key})
+        if cached is not None:
+            logger.debug("Returning cached collections list")
+            return cached
+
+        # Fetch from API
+        collections = await self.api_client.get_collections()
+
+        # Update cache
+        self._cache.set("get_collections", {"key": cache_key}, collections)
+        return collections
+
+    async def create_collection(
+        self, name: str, parent_key: str | None = None
+    ) -> dict[str, Any]:
+        """Create a new collection."""
+        result = await self.api_client.create_collection(name, parent_key)
+        self._cache.invalidate("get_collections", {"key": "collections_list"})
+        return result
+
+    async def delete_collection(self, collection_key: str) -> None:
+        """Delete a collection."""
+        await self.api_client.delete_collection(collection_key)
+        self._cache.invalidate("get_collections", {"key": "collections_list"})
+
+    async def update_collection(
+        self,
+        collection_key: str,
+        name: str | None = None,
+        parent_key: str | None = None,
+    ) -> None:
+        """Update a collection."""
+        await self.api_client.update_collection(collection_key, name, parent_key)
+        self._cache.invalidate("get_collections", {"key": "collections_list"})
+
+    async def get_collection_items(
+        self, collection_key: str, limit: int = 100
+    ) -> list[SearchResultItem]:
+        """Get items in a collection."""
+        items = await self.api_client.get_collection_items(collection_key, limit)
+        return [self._api_item_to_result(item) for item in items]
+
+    async def find_collection_by_name(
+        self, name: str, exact_match: bool = False
+    ) -> list[dict[str, Any]]:
+        """Find collections by name."""
+        all_collections = await self.get_collections()
+        matches = []
+        search_name = name.lower().strip()
+
+        for coll in all_collections:
+            data = coll.get("data", {})
+            coll_name = data.get("name", "")
+            coll_name_lower = coll_name.lower()
+
+            if exact_match:
+                if coll_name_lower == search_name:
+                    matches.append({**coll, "match_score": 1.0})
+            else:
+                if search_name in coll_name_lower:
+                    if coll_name_lower == search_name:
+                        score = 1.0
+                    elif coll_name_lower.startswith(search_name):
+                        score = 0.9
+                    else:
+                        score = 0.7
+                    matches.append({**coll, "match_score": score})
+
+        matches.sort(key=lambda x: x.get("match_score", 0), reverse=True)
+        return matches
+
+    # -------------------- Tag Operations --------------------
+
+    async def get_tags(self, limit: int = 100) -> list[str]:
+        """Get all tags in the library."""
+        cache_params = {"limit": limit}
+        cached = self._cache.get("get_tags", cache_params)
+        if cached is not None:
+            logger.debug("Returning cached tags list")
+            return cached
+
+        tags = await self.api_client.get_tags(limit)
+        tag_list = [t.get("tag", "") for t in tags if t.get("tag")]
+
+        self._cache.set("get_tags", cache_params, tag_list)
+        return tag_list
+
+    # -------------------- BibTeX/Annotation/Note --------------------
+
+    async def get_bibtex(self, item_key: str, library_id: int = 1) -> str:
+        """Get BibTeX for an item."""
+        if self.bibtex_client:
+            try:
+                bibtex = self.bibtex_client.export_bibtex(item_key, library_id)
+                if bibtex:
+                    return bibtex
+            except Exception as e:
+                logger.debug(f"Better BibTeX export failed: {e}")
+
+        item = await self.get_item(item_key)
+        return self._bibtex_formatter.format_item(item)
+
+    async def get_annotations(
+        self, item_key: str, library_id: int = 1
+    ) -> list[dict[str, Any]]:
+        """Get annotations for an item."""
+        if self.bibtex_client:
+            try:
+                citekey = self.bibtex_client.get_citekey(item_key, library_id)
+                if citekey:
+                    return self.bibtex_client.get_annotations(citekey, library_id)
+            except Exception as e:
+                logger.debug(f"Better BibTeX annotations failed: {e}")
+
+        children = await self.get_item_children(item_key, item_type="annotation")
+        return children
+
+    async def get_notes(self, item_key: str) -> list[dict[str, Any]]:
+        """Get notes for an item."""
+        return await self.get_item_children(item_key, item_type="note")
+
+    async def create_note(
+        self, parent_key: str, content: str, tags: list[str] | None = None
+    ) -> dict[str, Any]:
+        """Create a note attached to an item."""
+        return await self.api_client.create_note(parent_key, content, tags)
+
+    # -------------------- Item Management --------------------
+
+    async def add_item_to_collection(
+        self, collection_key: str, item_key: str
+    ) -> dict[str, Any]:
+        """Add an item to a collection."""
+        return await self.api_client.add_to_collection(collection_key, item_key)
+
+    async def remove_item_from_collection(
+        self, collection_key: str, item_key: str
+    ) -> dict[str, Any]:
+        """Remove an item from a collection."""
+        return await self.api_client.remove_from_collection(collection_key, item_key)
+
+    async def delete_item(self, item_key: str) -> dict[str, Any]:
+        """Delete an item."""
+        return await self.api_client.delete_item(item_key)
+
+    async def add_tags_to_item(self, item_key: str, tags: list[str]) -> dict[str, Any]:
+        """Add tags to an item."""
+        result = await self.api_client.add_tags(item_key, tags)
+        self._cache.invalidate("get_tags", {"limit": 100})
+        return result
+
+    async def update_item(self, item: dict[str, Any]) -> dict[str, Any]:
+        """Update an item's data."""
+        return await self.api_client.update_item(item)
+
+    async def create_items(self, items: list[dict[str, Any]]) -> dict[str, Any]:
+        """Create new items."""
+        return await self.api_client.create_items(items)
+
+    async def get_item_bundle(
+        self,
+        item_key: str,
+        include_fulltext: bool = False,
+        include_annotations: bool = True,
+        include_notes: bool = True,
+        include_bibtex: bool = False,
+    ) -> dict[str, Any]:
+        """Get comprehensive bundle of item data."""
+        bundle: dict[str, Any] = {}
+
+        # TODO: Optimize this with asyncio.gather in Phase 2
+        item = await self.get_item(item_key)
+        bundle["metadata"] = item
+
+        children = await self.get_item_children(item_key)
+        bundle["attachments"] = [
+            c for c in children if c.get("data", {}).get("itemType") == "attachment"
+        ]
+
+        if include_notes:
+            bundle["notes"] = [
+                c for c in children if c.get("data", {}).get("itemType") == "note"
+            ]
+
+        if include_annotations:
+            bundle["annotations"] = await self.get_annotations(item_key)
+
+        if include_fulltext:
+            bundle["fulltext"] = await self.get_fulltext(item_key)
+
+        if include_bibtex:
+            bundle["bibtex"] = await self.get_bibtex(item_key)
+
+        return bundle
+
+    # -------------------- Helpers --------------------
+
+    def _api_item_to_result(self, item: dict[str, Any]) -> SearchResultItem:
+        """Convert API item to SearchResultItem."""
+        data = item.get("data", {})
+        tags = [t.get("tag", "") for t in data.get("tags", []) if t.get("tag")]
+
+        return SearchResultItem(
+            key=data.get("key", item.get("key", "")),
+            title=data.get("title", "Untitled"),
+            authors=format_creators(data.get("creators", [])),
+            date=data.get("date"),
+            item_type=data.get("itemType", "unknown"),
+            abstract=data.get("abstractNote"),
+            doi=data.get("DOI"),
+            tags=tags if tags else [],
+        )
+
+    def _zotero_item_to_result(self, item: ZoteroItem) -> SearchResultItem:
+        """Convert ZoteroItem to SearchResultItem."""
+        return SearchResultItem(
+            key=item.key,
+            title=item.title or "Untitled",
+            authors=item.creators or "",
+            date=item.date_added,
+            item_type=item.item_type or "unknown",
+            abstract=item.abstract,
+            doi=item.doi,
+            tags=item.tags if item.tags else [],
+        )

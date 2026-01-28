@@ -21,8 +21,9 @@ from zotero_mcp.clients.local_db import (
 from zotero_mcp.clients.zotero_client import ZoteroAPIClient, get_zotero_client
 from zotero_mcp.formatters import BibTeXFormatter, JSONFormatter, MarkdownFormatter
 from zotero_mcp.models.common import ResponseFormat, SearchResultItem
-from zotero_mcp.utils.cache import ResponseCache
-from zotero_mcp.utils.helpers import format_creators, is_local_mode
+from zotero_mcp.services.item import ItemService
+from zotero_mcp.services.search import SearchService
+from zotero_mcp.utils.helpers import is_local_mode
 
 logger = logging.getLogger(__name__)
 
@@ -31,20 +32,14 @@ class DataAccessService:
     """
     Unified data access service for Zotero MCP.
 
-    This service acts as the central entry point for accessing Zotero data,
-    abstracting away the details of whether data comes from the Zotero Web API,
-    the Local Zotero API, or a direct Local Database connection.
+    Acts as a Facade delegating to specialized services:
+    - ItemService: CRUD, collections, tags
+    - SearchService: Search operations
 
-    It automatically selects the best available backend for each operation:
+    Automatically selects the best available backend for each operation:
     - Local Database: Used for fast reads and search when available.
     - Better BibTeX: Used for citation keys and annotation extraction.
     - Zotero API: Used for write operations and fallback when local access is unavailable.
-
-    Attributes:
-        _api_client: Client for Zotero Web/Local API.
-        _local_client: Client for direct SQLite database access.
-        _bibtex_client: Client for Better BibTeX JSON-RPC interactions.
-        _cache: Internal LRU cache for reducing API load on static resources.
     """
 
     def __init__(
@@ -68,10 +63,10 @@ class DataAccessService:
             ResponseFormat.MARKDOWN: MarkdownFormatter(),
             ResponseFormat.JSON: JSONFormatter(),
         }
-        self._bibtex_formatter = BibTeXFormatter()
-        # Internal cache for slow, infrequent changing data (collections, tags)
-        # Default TTL: 5 minutes (300 seconds)
-        self._cache = ResponseCache(ttl_seconds=300)
+
+        # Initialize sub-services (lazy loading clients)
+        self._item_service: ItemService | None = None
+        self._search_service: SearchService | None = None
 
     @property
     def api_client(self) -> ZoteroAPIClient:
@@ -94,6 +89,27 @@ class DataAccessService:
             self._bibtex_client = get_better_bibtex_client()
         return self._bibtex_client
 
+    @property
+    def item_service(self) -> ItemService:
+        """Get ItemService instance."""
+        if self._item_service is None:
+            self._item_service = ItemService(
+                api_client=self.api_client,
+                local_client=self.local_client,
+                bibtex_client=self.bibtex_client,
+            )
+        return self._item_service
+
+    @property
+    def search_service(self) -> SearchService:
+        """Get SearchService instance."""
+        if self._search_service is None:
+            self._search_service = SearchService(
+                api_client=self.api_client,
+                local_client=self.local_client,
+            )
+        return self._search_service
+
     def get_formatter(
         self, response_format: ResponseFormat
     ) -> MarkdownFormatter | JSONFormatter:
@@ -113,37 +129,9 @@ class DataAccessService:
     ) -> list[SearchResultItem]:
         """
         Search items in the library.
-
-        Uses local database if available for faster results.
-
-        Args:
-            query: Search query
-            limit: Maximum results
-            offset: Pagination offset
-            qmode: Search mode
-
-        Returns:
-            List of search results
+        Delegates to SearchService.
         """
-        # Try local database first for speed
-        if self.local_client and qmode == "everything":
-            try:
-                items = self.local_client.search_items(query, limit=limit + offset)
-                return [
-                    self._zotero_item_to_result(item)
-                    for item in items[offset : offset + limit]
-                ]
-            except Exception as e:
-                logger.warning(f"Local search failed, falling back to API: {e}")
-
-        # Fall back to API
-        items = await self.api_client.search_items(
-            query=query,
-            qmode=qmode,
-            limit=limit,
-            start=offset,
-        )
-        return [self._api_item_to_result(item) for item in items]
+        return await self.search_service.search_items(query, limit, offset, qmode)
 
     async def get_recent_items(
         self,
@@ -152,16 +140,9 @@ class DataAccessService:
     ) -> list[SearchResultItem]:
         """
         Get recently added items.
-
-        Args:
-            limit: Maximum results
-            days: Days to look back
-
-        Returns:
-            List of recent items
+        Delegates to SearchService.
         """
-        items = await self.api_client.get_recent_items(limit=limit, days=days)
-        return [self._api_item_to_result(item) for item in items]
+        return await self.search_service.get_recent_items(limit, days)
 
     async def search_by_tag(
         self,
@@ -171,40 +152,9 @@ class DataAccessService:
     ) -> list[SearchResultItem]:
         """
         Search items by tags.
-
-        Args:
-            tags: Required tags (AND logic)
-            exclude_tags: Tags to exclude
-            limit: Maximum results
-
-        Returns:
-            Matching items
+        Delegates to SearchService.
         """
-        # Get items with first tag
-        if not tags:
-            return []
-
-        items = await self.api_client.get_items_by_tag(tags[0], limit=100)
-
-        # Filter by additional tags
-        for tag in tags[1:]:
-            items = [
-                i
-                for i in items
-                if tag in [t.get("tag", "") for t in i.get("data", {}).get("tags", [])]
-            ]
-
-        # Exclude tags
-        if exclude_tags:
-            for tag in exclude_tags:
-                items = [
-                    i
-                    for i in items
-                    if tag
-                    not in [t.get("tag", "") for t in i.get("data", {}).get("tags", [])]
-                ]
-
-        return [self._api_item_to_result(item) for item in items[:limit]]
+        return await self.search_service.search_by_tag(tags, exclude_tags, limit)
 
     # -------------------- Item Operations --------------------
 
@@ -212,124 +162,39 @@ class DataAccessService:
         self,
         item_key: str,
     ) -> dict[str, Any]:
-        """
-        Get item by key.
-
-        Args:
-            item_key: Zotero item key
-
-        Returns:
-            Full item data
-        """
-        return await self.api_client.get_item(item_key)
+        """Get item by key."""
+        return await self.item_service.get_item(item_key)
 
     async def get_item_children(
         self,
         item_key: str,
         item_type: str | None = None,
     ) -> list[dict[str, Any]]:
-        """
-        Get child items (attachments, notes).
-
-        Args:
-            item_key: Parent item key
-            item_type: Filter by type
-
-        Returns:
-            Child items
-        """
-        return await self.api_client.get_item_children(item_key, item_type)
+        """Get child items."""
+        return await self.item_service.get_item_children(item_key, item_type)
 
     async def get_fulltext(
         self,
         item_key: str,
     ) -> str | None:
-        """
-        Get full-text content for an item.
-
-        Tries API first (fast if indexed), then falls back to direct PDF
-        extraction from local files when available.
-
-        Args:
-            item_key: Item key
-
-        Returns:
-            Full-text content if available
-        """
-        # Try API first (existing behavior)
-        result = await self.api_client.get_fulltext(item_key)
-        if result:
-            return result
-
-        # Fallback to local extraction if available
-        if self.local_client:
-            logger.info(f"API fulltext empty, trying local extraction for {item_key}")
-            local_result = self.local_client.get_fulltext_by_key(item_key)
-            if local_result:
-                text, source = local_result
-                logger.info(f"Local extraction succeeded from {source}")
-                return text
-            logger.warning(f"Local extraction also failed for {item_key}")
-
-        return None
+        """Get full-text content."""
+        return await self.item_service.get_fulltext(item_key)
 
     # -------------------- Collection Operations --------------------
 
     async def get_collections(self) -> list[dict[str, Any]]:
-        """
-        Get all collections in the library.
-
-        Results are cached for 5 minutes to reduce API load.
-
-        Returns:
-            List of collection objects containing keys and names.
-        """
-        # Check cache first
-        cache_key = "collections_list"
-        cached = self._cache.get("get_collections", {"key": cache_key})
-        if cached is not None:
-            logger.debug("Returning cached collections list")
-            return cached
-
-        # Fetch from API
-        collections = await self.api_client.get_collections()
-
-        # Update cache
-        self._cache.set("get_collections", {"key": cache_key}, collections)
-        return collections
+        """Get all collections."""
+        return await self.item_service.get_collections()
 
     async def create_collection(
         self, name: str, parent_key: str | None = None
     ) -> dict[str, Any]:
-        """
-        Create a new collection.
-
-        Invalidates the collections cache upon success.
-
-        Args:
-            name: Name of the new collection.
-            parent_key: Optional key of the parent collection.
-
-        Returns:
-            Dictionary containing the created collection's metadata.
-        """
-        result = await self.api_client.create_collection(name, parent_key)
-        # Invalidate cache
-        self._cache.invalidate("get_collections", {"key": "collections_list"})
-        return result
+        """Create a new collection."""
+        return await self.item_service.create_collection(name, parent_key)
 
     async def delete_collection(self, collection_key: str) -> None:
-        """
-        Delete a collection.
-
-        Invalidates the collections cache upon success.
-
-        Args:
-            collection_key: Key of the collection to delete.
-        """
-        await self.api_client.delete_collection(collection_key)
-        # Invalidate cache
-        self._cache.invalidate("get_collections", {"key": "collections_list"})
+        """Delete a collection."""
+        await self.item_service.delete_collection(collection_key)
 
     async def update_collection(
         self,
@@ -337,66 +202,22 @@ class DataAccessService:
         name: str | None = None,
         parent_key: str | None = None,
     ) -> None:
-        """
-        Update a collection (rename or move).
-
-        Invalidates the collections cache upon success.
-
-        Args:
-            collection_key: Key of the collection to update.
-            name: New name for the collection.
-            parent_key: New parent collection key (for moving).
-        """
-        await self.api_client.update_collection(collection_key, name, parent_key)
-        # Invalidate cache
-        self._cache.invalidate("get_collections", {"key": "collections_list"})
+        """Update a collection."""
+        await self.item_service.update_collection(collection_key, name, parent_key)
 
     async def get_collection_items(
         self,
         collection_key: str,
         limit: int = 100,
     ) -> list[SearchResultItem]:
-        """
-        Get items in a collection.
-
-        Args:
-            collection_key: Collection key
-            limit: Maximum results
-
-        Returns:
-            Items in collection
-        """
-        items = await self.api_client.get_collection_items(collection_key, limit)
-        return [self._api_item_to_result(item) for item in items]
+        """Get items in a collection."""
+        return await self.item_service.get_collection_items(collection_key, limit)
 
     # -------------------- Tag Operations --------------------
 
     async def get_tags(self, limit: int = 100) -> list[str]:
-        """
-        Get all tags in the library.
-
-        Results are cached for 5 minutes.
-
-        Args:
-            limit: Maximum number of tags to retrieve (default: 100).
-
-        Returns:
-            List of tag strings.
-        """
-        # Check cache
-        cache_params = {"limit": limit}
-        cached = self._cache.get("get_tags", cache_params)
-        if cached is not None:
-            logger.debug("Returning cached tags list")
-            return cached
-
-        # Fetch from API
-        tags = await self.api_client.get_tags(limit)
-        tag_list = [t.get("tag", "") for t in tags if t.get("tag")]
-
-        # Update cache
-        self._cache.set("get_tags", cache_params, tag_list)
-        return tag_list
+        """Get all tags."""
+        return await self.item_service.get_tags(limit)
 
     # -------------------- Collection Search Operations --------------------
 
@@ -405,46 +226,8 @@ class DataAccessService:
         name: str,
         exact_match: bool = False,
     ) -> list[dict[str, Any]]:
-        """
-        Find collections by name.
-
-        Args:
-            name: Collection name to search for
-            exact_match: Whether to require exact name match
-
-        Returns:
-            List of matching collections with match scores
-        """
-        all_collections = await self.get_collections()
-        matches = []
-
-        search_name = name.lower().strip()
-
-        for coll in all_collections:
-            data = coll.get("data", {})
-            coll_name = data.get("name", "")
-            coll_name_lower = coll_name.lower()
-
-            # Calculate match score
-            if exact_match:
-                if coll_name_lower == search_name:
-                    matches.append({**coll, "match_score": 1.0})
-            else:
-                # Fuzzy matching
-                if search_name in coll_name_lower:
-                    # Calculate score based on position and length
-                    if coll_name_lower == search_name:
-                        score = 1.0  # Exact match
-                    elif coll_name_lower.startswith(search_name):
-                        score = 0.9  # Starts with
-                    else:
-                        score = 0.7  # Contains
-                    matches.append({**coll, "match_score": score})
-
-        # Sort by match score (descending)
-        matches.sort(key=lambda x: x.get("match_score", 0), reverse=True)
-
-        return matches
+        """Find collections by name."""
+        return await self.item_service.find_collection_by_name(name, exact_match)
 
     # -------------------- BibTeX Operations --------------------
 
@@ -453,30 +236,8 @@ class DataAccessService:
         item_key: str,
         library_id: int = 1,
     ) -> str:
-        """
-        Get BibTeX for an item.
-
-        Tries Better BibTeX first, then falls back to generated BibTeX.
-
-        Args:
-            item_key: Item key
-            library_id: Library ID
-
-        Returns:
-            BibTeX string
-        """
-        # Try Better BibTeX first
-        if self.bibtex_client:
-            try:
-                bibtex = self.bibtex_client.export_bibtex(item_key, library_id)
-                if bibtex:
-                    return bibtex
-            except Exception as e:
-                logger.debug(f"Better BibTeX export failed: {e}")
-
-        # Fall back to generated BibTeX
-        item = await self.get_item(item_key)
-        return self._bibtex_formatter.format_item(item)
+        """Get BibTeX for an item."""
+        return await self.item_service.get_bibtex(item_key, library_id)
 
     # -------------------- Annotation Operations --------------------
 
@@ -485,30 +246,8 @@ class DataAccessService:
         item_key: str,
         library_id: int = 1,
     ) -> list[dict[str, Any]]:
-        """
-        Get annotations for an item.
-
-        Uses Better BibTeX if available.
-
-        Args:
-            item_key: Item key
-            library_id: Library ID
-
-        Returns:
-            List of annotations
-        """
-        if self.bibtex_client:
-            try:
-                # Get citekey first
-                citekey = self.bibtex_client.get_citekey(item_key, library_id)
-                if citekey:
-                    return self.bibtex_client.get_annotations(citekey, library_id)
-            except Exception as e:
-                logger.debug(f"Better BibTeX annotations failed: {e}")
-
-        # Fall back to getting child annotations via API
-        children = await self.get_item_children(item_key, item_type="annotation")
-        return children
+        """Get annotations for an item."""
+        return await self.item_service.get_annotations(item_key, library_id)
 
     # -------------------- Note Operations --------------------
 
@@ -516,16 +255,8 @@ class DataAccessService:
         self,
         item_key: str,
     ) -> list[dict[str, Any]]:
-        """
-        Get notes for an item.
-
-        Args:
-            item_key: Item key
-
-        Returns:
-            List of notes
-        """
-        return await self.get_item_children(item_key, item_type="note")
+        """Get notes for an item."""
+        return await self.item_service.get_notes(item_key)
 
     async def create_note(
         self,
@@ -533,105 +264,40 @@ class DataAccessService:
         content: str,
         tags: list[str] | None = None,
     ) -> dict[str, Any]:
-        """
-        Create a note attached to an item.
-
-        Args:
-            parent_key: Parent item key
-            content: Note content (HTML)
-            tags: Optional tags
-
-        Returns:
-            Created note data
-        """
-        return await self.api_client.create_note(parent_key, content, tags)
+        """Create a note attached to an item."""
+        return await self.item_service.create_note(parent_key, content, tags)
 
     # -------------------- Item Management Operations --------------------
 
     async def add_item_to_collection(
         self, collection_key: str, item_key: str
     ) -> dict[str, Any]:
-        """
-        Add an item to a collection.
-
-        Args:
-            collection_key: Target collection key
-            item_key: Item to add
-
-        Returns:
-            Updated item data
-        """
-        return await self.api_client.add_to_collection(collection_key, item_key)
+        """Add an item to a collection."""
+        return await self.item_service.add_item_to_collection(collection_key, item_key)
 
     async def remove_item_from_collection(
         self, collection_key: str, item_key: str
     ) -> dict[str, Any]:
-        """
-        Remove an item from a collection.
-
-        Args:
-            collection_key: Collection to remove from
-            item_key: Item to remove
-
-        Returns:
-            Updated item data
-        """
-        return await self.api_client.remove_from_collection(collection_key, item_key)
+        """Remove an item from a collection."""
+        return await self.item_service.remove_item_from_collection(
+            collection_key, item_key
+        )
 
     async def delete_item(self, item_key: str) -> dict[str, Any]:
-        """
-        Delete an item (moves to trash).
-
-        Args:
-            item_key: Item to delete
-
-        Returns:
-            Deletion result
-        """
-        return await self.api_client.delete_item(item_key)
+        """Delete an item."""
+        return await self.item_service.delete_item(item_key)
 
     async def add_tags_to_item(self, item_key: str, tags: list[str]) -> dict[str, Any]:
-        """
-        Add tags to an item (preserves existing tags).
-
-        Invalidates the tags cache (specifically the default limit=100 view)
-        to ensure consistency.
-
-        Args:
-            item_key: Key of the item to tag.
-            tags: List of tag strings to add.
-
-        Returns:
-            The updated item data.
-        """
-        result = await self.api_client.add_tags(item_key, tags)
-        # Invalidate tags cache (optimistic invalidation for common case)
-        self._cache.invalidate("get_tags", {"limit": 100})
-        return result
+        """Add tags to an item."""
+        return await self.item_service.add_tags_to_item(item_key, tags)
 
     async def update_item(self, item: dict[str, Any]) -> dict[str, Any]:
-        """
-        Update an item's data.
-
-        Args:
-            item: Complete item object with modifications
-
-        Returns:
-            Updated item data
-        """
-        return await self.api_client.update_item(item)
+        """Update an item's data."""
+        return await self.item_service.update_item(item)
 
     async def create_items(self, items: list[dict[str, Any]]) -> dict[str, Any]:
-        """
-        Create new items.
-
-        Args:
-            items: List of item templates
-
-        Returns:
-            Creation result
-        """
-        return await self.api_client.create_items(items)
+        """Create new items."""
+        return await self.item_service.create_items(items)
 
     # -------------------- Bundle Operations --------------------
 
@@ -643,81 +309,30 @@ class DataAccessService:
         include_notes: bool = True,
         include_bibtex: bool = False,
     ) -> dict[str, Any]:
-        """
-        Get comprehensive bundle of item data.
+        """Get comprehensive bundle of item data."""
+        return await self.item_service.get_item_bundle(
+            item_key,
+            include_fulltext,
+            include_annotations,
+            include_notes,
+            include_bibtex,
+        )
 
-        Args:
-            item_key: Item key
-            include_fulltext: Include full text content
-            include_annotations: Include annotations
-            include_notes: Include notes
-            include_bibtex: Include BibTeX
-
-        Returns:
-            Bundle with metadata, children, and optional content
-        """
-        bundle: dict[str, Any] = {}
-
-        # Get base item
-        item = await self.get_item(item_key)
-        bundle["metadata"] = item
-
-        # Get children
-        children = await self.get_item_children(item_key)
-        bundle["attachments"] = [
-            c for c in children if c.get("data", {}).get("itemType") == "attachment"
-        ]
-
-        if include_notes:
-            bundle["notes"] = [
-                c for c in children if c.get("data", {}).get("itemType") == "note"
-            ]
-
-        if include_annotations:
-            bundle["annotations"] = await self.get_annotations(item_key)
-
-        if include_fulltext:
-            bundle["fulltext"] = await self.get_fulltext(item_key)
-
-        if include_bibtex:
-            bundle["bibtex"] = await self.get_bibtex(item_key)
-
-        return bundle
-
-    # -------------------- Helper Methods --------------------
+    # -------------------- Helper Methods (Legacy Support) --------------------
 
     def _api_item_to_result(self, item: dict[str, Any]) -> SearchResultItem:
         """Convert API item to SearchResultItem."""
-        data = item.get("data", {})
-        tags = [t.get("tag", "") for t in data.get("tags", []) if t.get("tag")]
-
-        return SearchResultItem(
-            key=data.get("key", item.get("key", "")),
-            title=data.get("title", "Untitled"),
-            authors=format_creators(data.get("creators", [])),
-            date=data.get("date"),
-            item_type=data.get("itemType", "unknown"),
-            abstract=data.get("abstractNote"),
-            doi=data.get("DOI"),
-            tags=tags if tags else [],
-            # SearchResultItem uses 'matched_text' instead of 'raw_data' but inherits ZoteroItemResult which allows extra fields
-            # We map raw_data if needed or rely on Pydantic extra="allow"
-            # Looking at SearchResultItem definition: it has similarity_score and matched_text
-            # It inherits ZoteroItemResult which has extra="allow"
-        )
+        # Delegate to search service or item service (both have this helper)
+        # We can expose it in ItemService public API if needed, or duplicate strictly for legacy
+        # For now, it's safer to keep the private method here if it's used internally?
+        # Actually, it's used by SearchService now.
+        # But this class no longer implements logic, so we might not need it unless subclasses use it.
+        # Let's keep a implementation that delegates to ItemService implementation
+        return self.item_service._api_item_to_result(item)
 
     def _zotero_item_to_result(self, item: ZoteroItem) -> SearchResultItem:
         """Convert ZoteroItem to SearchResultItem."""
-        return SearchResultItem(
-            key=item.key,
-            title=item.title or "Untitled",
-            authors=item.creators or "",
-            date=item.date_added,
-            item_type=item.item_type or "unknown",
-            abstract=item.abstract,
-            doi=item.doi,
-            tags=item.tags if item.tags else [],
-        )
+        return self.item_service._zotero_item_to_result(item)
 
 
 @lru_cache(maxsize=1)

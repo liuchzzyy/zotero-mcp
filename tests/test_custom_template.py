@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
 import pytest
 
@@ -46,12 +46,27 @@ async def test_workflow_service_propagates_template():
 
     # Mock dependencies
     mock_data_service = MagicMock()
-    mock_data_service.get_item = AsyncMock(
-        return_value={"data": {"publicationTitle": "Journal"}}
+
+    # Configure ItemService for BatchLoader
+    mock_item_service = MagicMock()
+    mock_item_service.get_item = AsyncMock(
+        return_value={
+            "key": "ABC",
+            "data": {"publicationTitle": "Journal", "title": "Title", "creators": []},
+        }
     )
-    mock_data_service.get_fulltext = AsyncMock(return_value="Content")
+    mock_item_service.get_item_children = AsyncMock(return_value=[])
+    mock_item_service.get_fulltext = AsyncMock(return_value="Content")
+    mock_item_service.get_annotations = AsyncMock(return_value=[])
+    mock_item_service.get_bibtex = AsyncMock(return_value="")
+
+    # Set item_service property
+    # Since DataAccessService.item_service is a property, we need to mock it on the instance if possible,
+    # or just set it as an attribute since MagicMock handles attributes.
+    mock_data_service.item_service = mock_item_service
+
+    # DataAccessService methods
     mock_data_service.get_notes = AsyncMock(return_value=[])
-    mock_data_service.get_annotations = AsyncMock(return_value=[])
     mock_data_service.create_note = AsyncMock(
         return_value={"successful": {"0": {"key": "NOTE123"}}}
     )

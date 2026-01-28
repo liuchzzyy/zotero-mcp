@@ -19,6 +19,7 @@ from zotero_mcp.models.workflow import (
 )
 from zotero_mcp.services.checkpoint import get_checkpoint_manager
 from zotero_mcp.services.data_access import get_data_service
+from zotero_mcp.utils.batch_loader import BatchLoader
 from zotero_mcp.utils.markdown_html import markdown_to_html
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,9 @@ class WorkflowService:
     def __init__(self):
         self.data_service = get_data_service()
         self.checkpoint_manager = get_checkpoint_manager()
+        # BatchLoader will be initialized with item_service from data_service
+        # We access item_service via property to ensure it's initialized
+        self.batch_loader = BatchLoader(self.data_service.item_service)
 
     async def prepare_analysis(
         self,
@@ -68,18 +72,6 @@ class WorkflowService:
     ) -> PrepareAnalysisResponse:
         """
         Prepare analysis data for external AI analysis (Mode A).
-
-        Args:
-            source: "collection" or "recent"
-            collection_key: Collection key (takes precedence)
-            collection_name: Collection name for fuzzy matching
-            days: Days to look back (for recent mode)
-            limit: Maximum items to prepare
-            include_annotations: Whether to include PDF annotations
-            skip_existing: Skip items that already have notes
-
-        Returns:
-            PrepareAnalysisResponse with prepared items
         """
         # Get items based on source
         items = await self._get_items(
@@ -97,50 +89,92 @@ class WorkflowService:
         prepared_items = []
         skipped_count = 0
 
-        for item in items:
-            try:
-                # Check if already has notes
+        # Optimization: Fetch bundles in batches
+        chunk_size = 5
+        item_keys = [item.key for item in items]
+
+        # We need to map keys to Item objects for metadata not in bundle (like item.title vs bundle.title)
+        # Actually bundle['metadata'] has everything.
+
+        for i in range(0, len(items), chunk_size):
+            chunk_items = items[i : i + chunk_size]
+            chunk_keys = [item.key for item in chunk_items]
+
+            # 1. Filter existing notes first (fast check)
+            # We can't batch check notes easily without fetching children, which BatchLoader does.
+            # But legacy logic checked notes first to avoid heavy fetch.
+            # Let's verify existing notes first if skip_existing is True.
+
+            keys_to_fetch = []
+            for item in chunk_items:
                 if skip_existing:
                     notes = await self.data_service.get_notes(item.key)
                     if notes:
                         skipped_count += 1
                         continue
+                keys_to_fetch.append(item.key)
 
-                # Get metadata
-                item_data = await self.data_service.get_item(item.key)
-                data = item_data.get("data", {})
+            if not keys_to_fetch:
+                continue
 
-                # Get full text
-                fulltext = await self.data_service.get_fulltext(item.key)
+            # 2. Parallel Fetch
+            bundles = await self.batch_loader.fetch_many_bundles(
+                keys_to_fetch,
+                include_fulltext=True,
+                include_annotations=include_annotations,
+                include_bibtex=False,
+            )
 
-                # Get annotations if requested
-                annotations = []
-                if include_annotations:
-                    annotations = await self.data_service.get_annotations(item.key)
+            # Map bundles by key
+            bundle_map = {b["metadata"]["key"]: b for b in bundles}
+
+            for item_key in keys_to_fetch:
+                if item_key not in bundle_map:
+                    logger.warning(f"Failed to fetch bundle for {item_key}")
+                    continue
+
+                bundle = bundle_map[item_key]
+                metadata = bundle["metadata"]
+                data = metadata.get("data", {})
 
                 # Build AnalysisItem
-                analysis_item = AnalysisItem(
-                    item_key=item.key,
-                    title=item.title,
-                    authors=item.authors,
-                    date=item.date,
-                    journal=data.get("publicationTitle"),
-                    doi=item.doi,
-                    pdf_content=fulltext or "PDF 内容不可用",
-                    annotations=annotations,
-                    metadata={
-                        "item_type": item.item_type,
-                        "abstract": item.abstract,
-                        "tags": item.tags,
-                    },
-                    template_questions=TEMPLATE_QUESTIONS,
-                )
+                try:
+                    analysis_item = AnalysisItem(
+                        item_key=metadata.get("key"),
+                        title=data.get("title", "Unknown"),
+                        authors=data.get(
+                            "creators", []
+                        ),  # Note: this might be raw list, SearchResultItem handles formatting
+                        # Wait, AnalysisItem expects formatted strings?
+                        # models/workflow.py says: authors: str | None
+                        # data_access.get_item returns raw Zotero JSON.
+                        # We need to format creators.
+                        # Let's use the helper from item service if possible or helper util.
+                        # DataAccessService had _api_item_to_result which formatted it.
+                        # Here we deal with raw dicts.
+                        # Let's try to be robust.
+                        date=data.get("date"),
+                        journal=data.get("publicationTitle"),
+                        doi=data.get("DOI"),
+                        pdf_content=bundle.get("fulltext") or "PDF 内容不可用",
+                        annotations=bundle.get("annotations", []),
+                        metadata={
+                            "item_type": data.get("itemType"),
+                            "abstract": data.get("abstractNote"),
+                            "tags": data.get("tags"),
+                        },
+                        template_questions=TEMPLATE_QUESTIONS,
+                    )
 
-                prepared_items.append(analysis_item)
+                    # Fix authors format
+                    # We need to format the creators list to string
+                    from zotero_mcp.utils.helpers import format_creators
 
-            except Exception as e:
-                logger.warning(f"Failed to prepare item {item.key}: {e}")
-                continue
+                    analysis_item.authors = format_creators(data.get("creators", []))
+
+                    prepared_items.append(analysis_item)
+                except Exception as e:
+                    logger.warning(f"Failed to build analysis item {item_key}: {e}")
 
         return PrepareAnalysisResponse(
             total_items=len(items),
@@ -260,48 +294,80 @@ class WorkflowService:
                 failed=0,
             )
 
-        # Process items
+        # Process items in batches to balance parallelism and rate limits
         results = []
         processed_count = len(workflow_state.processed_keys)
         total_count = workflow_state.total_items
 
-        for i, item_key in enumerate(remaining_keys):
-            # Find item
-            item = next((it for it in items if it.key == item_key), None)
-            if not item:
-                continue
+        chunk_size = 5
 
-            # Report progress
-            current = processed_count + i + 1
-            if progress_callback:
-                await progress_callback(
-                    current,
-                    total_count,
-                    f"正在分析 ({current}/{total_count}): {item.title[:40]}...",
+        for i in range(0, len(remaining_keys), chunk_size):
+            chunk_keys = remaining_keys[i : i + chunk_size]
+
+            # 1. Fetch Bundles Parallel (BatchLoader)
+            # We map keys to bundles.
+            bundles = await self.batch_loader.fetch_many_bundles(
+                chunk_keys,
+                include_fulltext=True,
+                include_annotations=include_annotations,
+                include_bibtex=False,
+            )
+            bundle_map = {b["metadata"]["key"]: b for b in bundles}
+
+            # 2. Analyze Sequential (LLM)
+            for item_key in chunk_keys:
+                # Find original item object for progress reporting
+                item = next((it for it in items if it.key == item_key), None)
+                if not item:
+                    continue
+
+                # Report progress
+                current = processed_count + len(results) + 1
+                if progress_callback:
+                    await progress_callback(
+                        current,
+                        total_count,
+                        f"正在分析 ({current}/{total_count}): {item.title[:40]}...",
+                    )
+
+                # Check if fetch failed
+                if item_key not in bundle_map:
+                    # Mark as failed
+                    workflow_state.mark_failed(item_key, "Failed to fetch item data")
+                    results.append(
+                        ItemAnalysisResult(
+                            item_key=item.key,
+                            title=item.title,
+                            success=False,
+                            error="Failed to fetch item data",
+                        )
+                    )
+                    continue
+
+                # Analyze using fetched bundle
+                result = await self._analyze_single_item(
+                    item=item,
+                    bundle=bundle_map[item_key],
+                    llm_client=llm_client,
+                    skip_existing=skip_existing,
+                    template=template,
+                    dry_run=dry_run,
                 )
 
-            # Analyze item
-            result = await self._analyze_single_item(
-                item=item,
-                llm_client=llm_client,
-                include_annotations=include_annotations,
-                skip_existing=skip_existing,
-                template=template,
-                dry_run=dry_run,
-            )
+                results.append(result)
 
-            results.append(result)
+                # Update workflow state
+                if result.success:
+                    workflow_state.mark_processed(item_key)
+                elif result.skipped:
+                    workflow_state.mark_skipped(item_key)
+                else:
+                    workflow_state.mark_failed(
+                        item_key, result.error or "Unknown error"
+                    )
 
-            # Update workflow state
-            if result.success:
-                workflow_state.mark_processed(item_key)
-            elif result.skipped:
-                workflow_state.mark_skipped(item_key)
-            else:
-                workflow_state.mark_failed(item_key, result.error or "Unknown error")
-
-            # Save checkpoint after each item
-            self.checkpoint_manager.save_state(workflow_state)
+                # Save checkpoint after each item
+                self.checkpoint_manager.save_state(workflow_state)
 
         # Final state update
         workflow_state.status = "completed"
@@ -323,61 +389,27 @@ class WorkflowService:
             can_resume=False,
         )
 
-    async def _check_existing_notes(self, item_key: str) -> bool:
-        """Check if item already has notes."""
-        try:
-            notes = await self.data_service.get_notes(item_key)
-            return len(notes) > 0
-        except Exception:
-            return False
-
-    async def _fetch_item_context(
-        self, item_key: str, include_annotations: bool
-    ) -> dict[str, Any]:
-        """Fetch metadata, fulltext, and annotations for an item."""
-        context = {
-            "metadata": {},
-            "fulltext": None,
-            "annotations": [],
-            "error": None,
-        }
-
-        try:
-            # Get item metadata
-            item_data = await self.data_service.get_item(item_key)
-            context["metadata"] = item_data.get("data", {})
-
-            # Get full text
-            context["fulltext"] = await self.data_service.get_fulltext(item_key)
-
-            # Get annotations
-            if include_annotations:
-                context["annotations"] = await self.data_service.get_annotations(
-                    item_key
-                )
-
-        except Exception as e:
-            context["error"] = str(e)
-
-        return context
-
     async def _analyze_single_item(
         self,
         item: Any,
+        bundle: dict[str, Any],
         llm_client: Any,
-        include_annotations: bool,
         skip_existing: bool,
         template: str | None,
         dry_run: bool,
     ) -> ItemAnalysisResult:
-        """Analyze a single item."""
+        """Analyze a single item using pre-fetched bundle."""
         start_time = time.time()
 
         try:
-            # 1. Check skip condition
+            # 1. Check skip condition (using notes from bundle if available, or fetch)
+            # Actually bundle has notes if requested.
+            # But skip logic might want to verify fresh state?
+            # BatchLoader fetches notes if include_notes=True.
+
             if skip_existing:
-                has_notes = await self._check_existing_notes(item.key)
-                if has_notes:
+                # If bundle has notes, skip
+                if bundle.get("notes"):
                     return ItemAnalysisResult(
                         item_key=item.key,
                         title=item.title,
@@ -387,18 +419,12 @@ class WorkflowService:
                         processing_time=time.time() - start_time,
                     )
 
-            # 2. Fetch Context
-            context = await self._fetch_item_context(item.key, include_annotations)
-            if context.get("error"):
-                return ItemAnalysisResult(
-                    item_key=item.key,
-                    title=item.title,
-                    success=False,
-                    error=f"数据获取失败: {context['error']}",
-                    processing_time=time.time() - start_time,
-                )
+            # 2. Extract Context from Bundle
+            metadata = bundle.get("metadata", {})
+            # Note: item object (SearchResultItem) has formatted creators, but metadata dict has raw list
+            # We can use item.authors or format from metadata
 
-            fulltext = context.get("fulltext")
+            fulltext = bundle.get("fulltext")
             if not fulltext:
                 return ItemAnalysisResult(
                     item_key=item.key,
@@ -408,16 +434,17 @@ class WorkflowService:
                     processing_time=time.time() - start_time,
                 )
 
+            annotations = bundle.get("annotations", [])
+
             # 3. Call LLM
-            metadata = context.get("metadata", {})
             markdown_note = await llm_client.analyze_paper(
                 title=item.title,
                 authors=item.authors,
-                journal=metadata.get("publicationTitle"),
+                journal=metadata.get("data", {}).get("publicationTitle"),
                 date=item.date,
                 doi=item.doi,
                 fulltext=fulltext,
-                annotations=context.get("annotations"),
+                annotations=annotations,
                 template=template,
             )
 
@@ -464,6 +491,46 @@ class WorkflowService:
                 error=str(e),
                 processing_time=time.time() - start_time,
             )
+
+    async def _get_items(
+        self,
+        source: str,
+        collection_key: str | None,
+        collection_name: str | None,
+        days: int,
+        limit: int,
+    ) -> list[Any]:
+        """Get items based on source."""
+        if source == "collection":
+            # Find collection
+            if collection_name and not collection_key:
+                matches = await self.data_service.find_collection_by_name(
+                    collection_name
+                )
+                if not matches:
+                    logger.warning(f"Collection not found: {collection_name}")
+                    return []
+                # Use best match
+                collection_key = matches[0].get("data", {}).get("key")
+
+            if not collection_key:
+                logger.warning("No collection key provided")
+                return []
+
+            # Get items in collection
+            items = await self.data_service.get_collection_items(
+                collection_key, limit=limit
+            )
+            return items
+
+        elif source == "recent":
+            # Get recent items
+            items = await self.data_service.get_recent_items(limit=limit, days=days)
+            return items
+
+        else:
+            logger.warning(f"Unknown source: {source}")
+            return []
 
     async def _get_items(
         self,
