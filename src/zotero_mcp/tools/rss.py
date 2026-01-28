@@ -1,4 +1,3 @@
-
 from fastmcp import Context, FastMCP
 from pydantic import BaseModel, Field
 

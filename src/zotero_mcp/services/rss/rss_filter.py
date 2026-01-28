@@ -13,12 +13,12 @@ Reference: https://github.com/liuchzzyy/RSS_Papers
 """
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import json
 import logging
 import os
-import re
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import re
 
 from openai import OpenAI
 

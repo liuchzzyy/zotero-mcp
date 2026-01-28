@@ -101,7 +101,7 @@ ANALYSIS_TEMPLATE = """你是一位专业的科研文献分析助手。请仔细
 #### 科学问题
 - 提出了什么新的科学问题或研究视角？
 
-#### 制备方法  
+#### 制备方法
 - 在材料制备或样品准备上有什么创新？
 - 是否开发了新的合成路线或工艺？
 
@@ -424,16 +424,16 @@ class LLMClient:
     async def _call_google_style(self, prompt: str) -> str:
         """Call Google Gemini API."""
         try:
-            import google.generativeai as genai
+            import google.generativeai as genai  # type: ignore[import-not-found]
         except ImportError as e:
             raise ImportError(
                 "google-generativeai package not installed. "
                 "Install with: pip install google-generativeai"
             ) from e
 
-        genai.configure(api_key=self.api_key)
+        genai.configure(api_key=self.api_key)  # type: ignore[attr-defined]
 
-        model = genai.GenerativeModel(self.model)
+        model = genai.GenerativeModel(self.model)  # type: ignore[attr-defined]
 
         try:
             loop = asyncio.get_event_loop()
@@ -465,7 +465,7 @@ def get_llm_client(
     Returns:
         Configured LLMClient
     """
-    return LLMClient(provider=provider, model=model)
+    return LLMClient(provider=provider, model=model)  # type: ignore[arg-type]
 
 
 def is_llm_configured() -> bool:

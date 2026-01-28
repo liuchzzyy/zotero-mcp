@@ -2,7 +2,6 @@
 Pydantic models for collection management tools.
 """
 
-
 from pydantic import Field
 
 from .common import BaseInput, BaseResponse

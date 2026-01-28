@@ -171,8 +171,10 @@ def register_item_tools(mcp: FastMCP) -> None:
                 )
 
             # Truncate if needed
-            truncated = len(fulltext) > params.max_length
-            if truncated:
+            truncated = (
+                params.max_length is not None and len(fulltext) > params.max_length
+            )
+            if truncated and params.max_length is not None:
                 fulltext = fulltext[: params.max_length]
 
             return FulltextResponse(

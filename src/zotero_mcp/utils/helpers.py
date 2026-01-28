@@ -128,3 +128,72 @@ def parse_tags(tags: list[dict[str, str]]) -> list[str]:
         List of tag name strings.
     """
     return [tag.get("tag", "") for tag in tags if tag.get("tag")]
+
+
+async def check_has_pdf(data_service, item_key: str) -> bool:
+    """
+    Check if an item has at least one PDF attachment.
+
+    Args:
+        data_service: DataAccessService instance
+        item_key: Zotero item key
+
+    Returns:
+        True if item has PDF attachment, False otherwise
+    """
+    try:
+        children = await data_service.get_item_children(item_key)
+        for child in children:
+            child_data = child.get("data", {})
+            if child_data.get("itemType") == "attachment":
+                content_type = child_data.get("contentType", "")
+                if content_type == "application/pdf":
+                    return True
+        return False
+    except Exception:
+        return False
+
+
+async def check_has_notes(data_service, item_key: str) -> bool:
+    """
+    Check if an item has at least one note.
+
+    Args:
+        data_service: DataAccessService instance
+        item_key: Zotero item key
+
+    Returns:
+        True if item has notes, False otherwise
+    """
+    try:
+        children = await data_service.get_item_children(item_key)
+        for child in children:
+            child_data = child.get("data", {})
+            if child_data.get("itemType") == "note":
+                return True
+        return False
+    except Exception:
+        return False
+
+
+async def check_has_tag(data_service, item_key: str, tag: str) -> bool:
+    """
+    Check if an item has a specific tag.
+
+    Args:
+        data_service: DataAccessService instance
+        item_key: Zotero item key
+        tag: Tag name to check for
+
+    Returns:
+        True if item has the tag, False otherwise
+    """
+    try:
+        item = await data_service.get_item(item_key)
+        if item:
+            item_data = item.get("data", {})
+            item_tags = [t.get("tag", "") for t in item_data.get("tags", [])]
+            return tag in item_tags
+        return False
+    except Exception:
+        return False

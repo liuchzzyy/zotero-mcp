@@ -266,9 +266,9 @@ class ZoteroSemanticSearch:
                         it.fulltext_source = None
 
                 # Convert to API-compatible format
-                api_items = []
+                api_items: list[dict[str, Any]] = []
                 for item in local_items:
-                    api_item = {
+                    api_item: dict[str, Any] = {
                         "key": item.key,
                         "version": 0,
                         "data": {
@@ -290,7 +290,7 @@ class ZoteroSemanticSearch:
                     }
 
                     if item.notes:
-                        api_item["data"]["notes"] = item.notes
+                        api_item["data"]["notes"] = item.notes  # type: ignore[index]
 
                     api_items.append(api_item)
 
@@ -354,7 +354,7 @@ class ZoteroSemanticSearch:
         logger.info("Starting database update...")
         start_time = datetime.now()
 
-        stats = {
+        stats: dict[str, Any] = {
             "total_items": 0,
             "processed_items": 0,
             "added_items": 0,

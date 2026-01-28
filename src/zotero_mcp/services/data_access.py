@@ -21,6 +21,7 @@ from zotero_mcp.clients.local_db import (
 from zotero_mcp.clients.zotero_client import ZoteroAPIClient, get_zotero_client
 from zotero_mcp.formatters import BibTeXFormatter, JSONFormatter, MarkdownFormatter
 from zotero_mcp.models.common import ResponseFormat, SearchResultItem
+from zotero_mcp.utils.cache import ResponseCache
 from zotero_mcp.utils.helpers import format_creators, is_local_mode
 
 logger = logging.getLogger(__name__)
@@ -28,12 +29,22 @@ logger = logging.getLogger(__name__)
 
 class DataAccessService:
     """
-    Unified data access service.
+    Unified data access service for Zotero MCP.
 
-    Automatically selects the best available backend for each operation:
-    - Local database for fast reads when available
-    - Better BibTeX for annotation and citation key access
-    - Zotero API for write operations and when local access unavailable
+    This service acts as the central entry point for accessing Zotero data,
+    abstracting away the details of whether data comes from the Zotero Web API,
+    the Local Zotero API, or a direct Local Database connection.
+
+    It automatically selects the best available backend for each operation:
+    - Local Database: Used for fast reads and search when available.
+    - Better BibTeX: Used for citation keys and annotation extraction.
+    - Zotero API: Used for write operations and fallback when local access is unavailable.
+
+    Attributes:
+        _api_client: Client for Zotero Web/Local API.
+        _local_client: Client for direct SQLite database access.
+        _bibtex_client: Client for Better BibTeX JSON-RPC interactions.
+        _cache: Internal LRU cache for reducing API load on static resources.
     """
 
     def __init__(
@@ -43,12 +54,12 @@ class DataAccessService:
         bibtex_client: BetterBibTeXClient | None = None,
     ):
         """
-        Initialize data access service.
+        Initialize the DataAccessService.
 
         Args:
-            api_client: Zotero API client
-            local_client: Local database client
-            bibtex_client: Better BibTeX client
+            api_client: Optional pre-configured ZoteroAPIClient.
+            local_client: Optional pre-configured LocalDatabaseClient.
+            bibtex_client: Optional pre-configured BetterBibTeXClient.
         """
         self._api_client = api_client
         self._local_client = local_client
@@ -58,6 +69,9 @@ class DataAccessService:
             ResponseFormat.JSON: JSONFormatter(),
         }
         self._bibtex_formatter = BibTeXFormatter()
+        # Internal cache for slow, infrequent changing data (collections, tags)
+        # Default TTL: 5 minutes (300 seconds)
+        self._cache = ResponseCache(ttl_seconds=300)
 
     @property
     def api_client(self) -> ZoteroAPIClient:
@@ -262,18 +276,60 @@ class DataAccessService:
     # -------------------- Collection Operations --------------------
 
     async def get_collections(self) -> list[dict[str, Any]]:
-        """Get all collections."""
-        return await self.api_client.get_collections()
+        """
+        Get all collections in the library.
+
+        Results are cached for 5 minutes to reduce API load.
+
+        Returns:
+            List of collection objects containing keys and names.
+        """
+        # Check cache first
+        cache_key = "collections_list"
+        cached = self._cache.get("get_collections", {"key": cache_key})
+        if cached is not None:
+            logger.debug("Returning cached collections list")
+            return cached
+
+        # Fetch from API
+        collections = await self.api_client.get_collections()
+
+        # Update cache
+        self._cache.set("get_collections", {"key": cache_key}, collections)
+        return collections
 
     async def create_collection(
         self, name: str, parent_key: str | None = None
     ) -> dict[str, Any]:
-        """Create a new collection."""
-        return await self.api_client.create_collection(name, parent_key)
+        """
+        Create a new collection.
+
+        Invalidates the collections cache upon success.
+
+        Args:
+            name: Name of the new collection.
+            parent_key: Optional key of the parent collection.
+
+        Returns:
+            Dictionary containing the created collection's metadata.
+        """
+        result = await self.api_client.create_collection(name, parent_key)
+        # Invalidate cache
+        self._cache.invalidate("get_collections", {"key": "collections_list"})
+        return result
 
     async def delete_collection(self, collection_key: str) -> None:
-        """Delete a collection."""
+        """
+        Delete a collection.
+
+        Invalidates the collections cache upon success.
+
+        Args:
+            collection_key: Key of the collection to delete.
+        """
         await self.api_client.delete_collection(collection_key)
+        # Invalidate cache
+        self._cache.invalidate("get_collections", {"key": "collections_list"})
 
     async def update_collection(
         self,
@@ -281,8 +337,19 @@ class DataAccessService:
         name: str | None = None,
         parent_key: str | None = None,
     ) -> None:
-        """Update a collection (rename or move)."""
+        """
+        Update a collection (rename or move).
+
+        Invalidates the collections cache upon success.
+
+        Args:
+            collection_key: Key of the collection to update.
+            name: New name for the collection.
+            parent_key: New parent collection key (for moving).
+        """
         await self.api_client.update_collection(collection_key, name, parent_key)
+        # Invalidate cache
+        self._cache.invalidate("get_collections", {"key": "collections_list"})
 
     async def get_collection_items(
         self,
@@ -305,9 +372,31 @@ class DataAccessService:
     # -------------------- Tag Operations --------------------
 
     async def get_tags(self, limit: int = 100) -> list[str]:
-        """Get all tags in the library."""
+        """
+        Get all tags in the library.
+
+        Results are cached for 5 minutes.
+
+        Args:
+            limit: Maximum number of tags to retrieve (default: 100).
+
+        Returns:
+            List of tag strings.
+        """
+        # Check cache
+        cache_params = {"limit": limit}
+        cached = self._cache.get("get_tags", cache_params)
+        if cached is not None:
+            logger.debug("Returning cached tags list")
+            return cached
+
+        # Fetch from API
         tags = await self.api_client.get_tags(limit)
-        return [t.get("tag", "") for t in tags if t.get("tag")]
+        tag_list = [t.get("tag", "") for t in tags if t.get("tag")]
+
+        # Update cache
+        self._cache.set("get_tags", cache_params, tag_list)
+        return tag_list
 
     # -------------------- Collection Search Operations --------------------
 
@@ -505,14 +594,20 @@ class DataAccessService:
         """
         Add tags to an item (preserves existing tags).
 
+        Invalidates the tags cache (specifically the default limit=100 view)
+        to ensure consistency.
+
         Args:
-            item_key: Item to tag
-            tags: List of tag names
+            item_key: Key of the item to tag.
+            tags: List of tag strings to add.
 
         Returns:
-            Updated item data
+            The updated item data.
         """
-        return await self.api_client.add_tags(item_key, tags)
+        result = await self.api_client.add_tags(item_key, tags)
+        # Invalidate tags cache (optimistic invalidation for common case)
+        self._cache.invalidate("get_tags", {"limit": 100})
+        return result
 
     async def update_item(self, item: dict[str, Any]) -> dict[str, Any]:
         """

@@ -16,6 +16,7 @@ from typing import Any
 import chromadb
 from chromadb import Documents, EmbeddingFunction, Embeddings
 from chromadb.config import Settings
+import chromadb.utils.embedding_functions
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +51,10 @@ class OpenAIEmbeddingFunction(EmbeddingFunction):
         try:
             import openai
 
-            client_kwargs = {"api_key": self.api_key}
-            if self.base_url:
-                client_kwargs["base_url"] = self.base_url
-            self.client = openai.OpenAI(**client_kwargs)
+            self.client = openai.OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url,
+            )
         except ImportError as e:
             raise ImportError("openai package is required for OpenAI embeddings") from e
 
@@ -64,7 +65,7 @@ class OpenAIEmbeddingFunction(EmbeddingFunction):
     def __call__(self, input: Documents) -> Embeddings:
         """Generate embeddings using OpenAI API."""
         response = self.client.embeddings.create(model=self.model_name, input=input)
-        return [data.embedding for data in response.data]
+        return [data.embedding for data in response.data]  # type: ignore[return-value]
 
 
 class GeminiEmbeddingFunction(EmbeddingFunction):
@@ -85,10 +86,10 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
             raise ValueError("Gemini API key is required")
 
         try:
-            from google import genai
-            from google.genai import types
+            from google import genai  # type: ignore[import-not-found]
+            from google.genai import types  # type: ignore[import-not-found]
 
-            client_kwargs = {"api_key": self.api_key}
+            client_kwargs: dict[str, Any] = {"api_key": self.api_key}
             if self.base_url:
                 http_options = types.HttpOptions(base_url=self.base_url)
                 client_kwargs["http_options"] = http_options
@@ -99,11 +100,11 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
                 "google-genai package is required for Gemini embeddings"
             ) from e
 
-    def name(self) -> str:
+    def name(self) -> str:  # type: ignore[override]
         """Return the name of this embedding function."""
         return "gemini"
 
-    def __call__(self, input: Documents) -> Embeddings:
+    def __call__(self, input: Documents) -> Embeddings:  # type: ignore[override]
         """Generate embeddings using Gemini API."""
         embeddings = []
         for text in input:
@@ -115,7 +116,7 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
                 ),
             )
             embeddings.append(response.embeddings[0].values)
-        return embeddings
+        return embeddings  # type: ignore[return-value]
 
 
 class HuggingFaceEmbeddingFunction(EmbeddingFunction):
@@ -134,14 +135,14 @@ class HuggingFaceEmbeddingFunction(EmbeddingFunction):
                 "sentence-transformers package is required for HuggingFace embeddings. Install with: pip install sentence-transformers"
             ) from e
 
-    def name(self) -> str:
+    def name(self) -> str:  # type: ignore[override]
         """Return the name of this embedding function."""
         return f"huggingface-{self.model_name}"
 
-    def __call__(self, input: Documents) -> Embeddings:
+    def __call__(self, input: Documents) -> Embeddings:  # type: ignore[override]
         """Generate embeddings using HuggingFace model."""
         embeddings = self.model.encode(input, convert_to_numpy=True)
-        return embeddings.tolist()
+        return embeddings.tolist()  # type: ignore[return-value]
 
 
 class ChromaClient:
@@ -271,7 +272,7 @@ class ChromaClient:
             ids: List of unique IDs for each document
         """
         try:
-            self.collection.add(documents=documents, metadatas=metadatas, ids=ids)
+            self.collection.add(documents=documents, metadatas=metadatas, ids=ids)  # type: ignore[arg-type]
             logger.info(f"Added {len(documents)} documents to ChromaDB collection")
         except Exception as e:
             logger.error(f"Error adding documents to ChromaDB: {e}")
@@ -292,7 +293,7 @@ class ChromaClient:
             ids: List of unique IDs for each document
         """
         try:
-            self.collection.upsert(documents=documents, metadatas=metadatas, ids=ids)
+            self.collection.upsert(documents=documents, metadatas=metadatas, ids=ids)  # type: ignore[arg-type]
             logger.info(f"Upserted {len(documents)} documents to ChromaDB collection")
         except Exception as e:
             logger.error(f"Error upserting documents to ChromaDB: {e}")
@@ -322,12 +323,12 @@ class ChromaClient:
                 query_texts=query_texts,
                 n_results=n_results,
                 where=where,
-                where_document=where_document,
+                where_document=where_document,  # type: ignore[arg-type]
             )
             logger.info(
                 f"Semantic search returned {len(results.get('ids', [[]])[0])} results"
             )
-            return results
+            return dict(results)  # type: ignore[arg-type]
         except Exception as e:
             logger.error(f"Error performing semantic search: {e}")
             raise
@@ -399,7 +400,7 @@ class ChromaClient:
         try:
             result = self.collection.get(ids=[doc_id], include=["metadatas"])
             if result["ids"] and result["metadatas"]:
-                return result["metadatas"][0]
+                return dict(result["metadatas"][0])  # type: ignore[arg-type]
             return None
         except Exception:
             return None
@@ -462,7 +463,9 @@ def create_chroma_client(config_path: str | None = None) -> ChromaClient:
                 config["embedding_config"]["base_url"] = gemini_base_url
 
     return ChromaClient(
-        collection_name=config["collection_name"],
-        embedding_model=config["embedding_model"],
-        embedding_config=config["embedding_config"],
+        collection_name=str(config["collection_name"]),
+        embedding_model=str(config["embedding_model"]),
+        embedding_config=config["embedding_config"]
+        if isinstance(config["embedding_config"], dict)
+        else {},
     )
