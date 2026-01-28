@@ -81,8 +81,8 @@ async def filter_items_with_pdf(data_service, items):
     logger.info(f"Checking {len(items)} items for PDF attachments...")
 
     for item in items:
-        item_key = item.get("key", "")
-        item_title = item.get("data", {}).get("title", "Untitled")
+        item_key = item.key
+        item_title = item.title
 
         has_pdf = await check_has_pdf(data_service, item_key)
         if has_pdf:
@@ -146,7 +146,7 @@ async def main():
             collection_key, limit=MAX_ITEMS
         )
 
-        all_items = items_response.get("results", [])
+        all_items = items_response
         logger.info(f"Found {len(all_items)} items in collection")
 
         if not all_items:
