@@ -27,6 +27,7 @@ import sys
 # Setup path to import zotero_mcp modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from zotero_mcp.services.analysis_status import AnalysisStatusService
 from zotero_mcp.services.data_access import get_data_service
 from zotero_mcp.services.workflow import WorkflowService
 
@@ -114,6 +115,9 @@ async def filter_items_for_analysis(data_service, items):
     items_to_analyze = []
     logger.info(f"Filtering {len(items)} items...")
 
+    # Initialize status service
+    status_service = AnalysisStatusService(data_service.item_service)
+
     for item in items:
         # Extract raw_data from SearchResult
         raw_item = item.raw_data if hasattr(item, "raw_data") else item
@@ -124,10 +128,10 @@ async def filter_items_for_analysis(data_service, items):
             else raw_item.get("data", {}).get("title", "Untitled")
         )
 
-        # Check for tags - use item directly as SearchResultItem has .tags attribute
-        has_tags = check_has_tags(item)
-        if has_tags:
-            logger.info(f"  ⊘ {item_title[:50]} - Already has tags, skipping")
+        # Check analysis status (Standardized Logic)
+        is_analyzed = await status_service.is_analyzed(item_key)
+        if is_analyzed:
+            logger.info(f"  ⊘ {item_title[:50]} - Already analyzed (has tag), skipping")
             continue
 
         # Check for PDF
