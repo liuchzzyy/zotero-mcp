@@ -14,6 +14,7 @@ Reference: https://github.com/liuchzzyy/RSS_Papers
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import hashlib
 import json
 import logging
 import os
@@ -25,6 +26,8 @@ from openai import OpenAI
 from zotero_mcp.models.rss import RSSItem
 
 logger = logging.getLogger(__name__)
+
+KEYWORDS_CACHE_FILE = Path("RSS/keywords_cache.json")
 
 
 class RSSFilter:
@@ -103,7 +106,7 @@ Do not include any other text, explanation, or markdown formatting."""
                         "content": f"Extract keywords from this research interest:\n\n{research_prompt}",
                     },
                 ],
-                temperature=0.7,  # Some creativity for diverse candidates
+                temperature=0.0,  # Zero temperature for deterministic generation
                 max_tokens=500,
             )
 
@@ -144,7 +147,7 @@ Select exactly 10 keywords. Do not include any other text."""
                         "content": f"Select the 10 best keywords from:\n{json.dumps(unique_candidates)}",
                     },
                 ],
-                temperature=0.3,  # Lower temperature for more consistent selection
+                temperature=0.0,  # Zero temperature for deterministic selection
                 max_tokens=300,
             )
 
@@ -214,6 +217,22 @@ Select exactly 10 keywords. Do not include any other text."""
         """
         research_prompt = self.load_prompt(prompt_file)
 
+        # Calculate hash of the prompt for caching
+        prompt_hash = hashlib.sha256(research_prompt.encode("utf-8")).hexdigest()
+
+        # Check cache
+        if KEYWORDS_CACHE_FILE.exists():
+            try:
+                cache_data = json.loads(KEYWORDS_CACHE_FILE.read_text(encoding="utf-8"))
+                if cache_data.get("hash") == prompt_hash:
+                    cached_keywords = cache_data.get("keywords", [])
+                    if cached_keywords:
+                        logger.info("Using cached keywords (prompt unchanged)")
+                        self._keywords = cached_keywords
+                        return cached_keywords
+            except Exception as e:
+                logger.warning(f"Failed to load keyword cache: {e}")
+
         # Stage 1: Generate candidates in parallel
         logger.info(
             f"Generating candidate keywords with {num_parallel_calls} parallel calls..."
@@ -246,6 +265,21 @@ Select exactly 10 keywords. Do not include any other text."""
         best_keywords = await asyncio.to_thread(
             self._select_best_keywords, unique_candidates
         )
+
+        # Save to cache
+        try:
+            KEYWORDS_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            cache_data = {
+                "hash": prompt_hash,
+                "keywords": best_keywords,
+                "prompt_file": str(prompt_file or self.prompt_file or "RSS/prompt.txt"),
+            }
+            KEYWORDS_CACHE_FILE.write_text(
+                json.dumps(cache_data, indent=2), encoding="utf-8"
+            )
+            logger.info(f"Saved keywords to cache: {KEYWORDS_CACHE_FILE}")
+        except Exception as e:
+            logger.warning(f"Failed to save keyword cache: {e}")
 
         self._keywords = best_keywords
         logger.info(f"Final keywords: {best_keywords}")
