@@ -30,6 +30,7 @@ from datetime import datetime, timedelta
 import logging
 import os
 from pathlib import Path
+import re
 import sys
 
 # Setup path to import zotero_mcp modules
@@ -64,6 +65,31 @@ if DEBUG:
     logger.setLevel(logging.DEBUG)
 
 
+def clean_title(title: str) -> str:
+    """
+    Clean article title by removing common prefixes.
+
+    Removes patterns like:
+    - [ASAP]
+    - [Featured]
+    - [Just Accepted]
+    - [Open Access]
+
+    Args:
+        title: Raw title string
+
+    Returns:
+        Cleaned title string
+    """
+    if not title:
+        return ""
+
+    # Remove leading brackets content e.g. "[ASAP] Title" -> "Title"
+    # Non-greedy match for content inside brackets at start of string
+    cleaned = re.sub(r"^\[.*?\]\s*", "", title)
+    return cleaned.strip()
+
+
 async def create_zotero_item_from_rss(data_service, rss_item, collection_key: str):
     """
     Create a Zotero item from an RSS feed item.
@@ -76,18 +102,37 @@ async def create_zotero_item_from_rss(data_service, rss_item, collection_key: st
     Returns:
         Created item key or None if failed
     """
+    # Initialize log_title with raw title in case cleaning fails or hasn't happened
+    log_title = rss_item.title
+
     try:
-        # Check if item already exists (by URL)
-        # This is a simple check - in production you might want more sophisticated deduplication
-        existing = await data_service.search_items(query=rss_item.link, limit=1)
-        if existing and len(existing) > 0:
-            logger.info(f"  ⊘ Item already exists: {rss_item.title[:50]}")
+        # Clean the title first
+        cleaned_title = clean_title(rss_item.title)
+        log_title = cleaned_title
+
+        # 1. Check if item already exists by URL
+
+        existing_by_url = await data_service.search_items(query=rss_item.link, limit=1)
+        if existing_by_url and len(existing_by_url) > 0:
+            logger.info(f"  ⊘ Duplicate (URL): {cleaned_title[:50]}")
             return None
+
+        # 2. Check if item already exists by Title (fallback)
+        # Use qmode="titleCreatorYear" for more precise matching
+        existing_by_title = await data_service.search_items(
+            query=cleaned_title, qmode="titleCreatorYear", limit=1
+        )
+        if existing_by_title and len(existing_by_title) > 0:
+            # Verify exact title match to avoid partial matches
+            found_title = existing_by_title[0].get("data", {}).get("title", "")
+            if found_title.lower() == cleaned_title.lower():
+                logger.info(f"  ⊘ Duplicate (Title): {cleaned_title[:50]}")
+                return None
 
         # Create item data structure for Zotero
         item_data = {
             "itemType": "journalArticle",
-            "title": rss_item.title,
+            "title": cleaned_title,  # Use cleaned title
             "url": rss_item.link,
             "abstractNote": rss_item.description or "",
             "publicationTitle": rss_item.source_title,
@@ -115,21 +160,21 @@ async def create_zotero_item_from_rss(data_service, rss_item, collection_key: st
 
         if result and len(result.get("successful", {})) > 0:
             item_key = list(result["successful"].keys())[0]
-            logger.info(f"  ✓ Created: {rss_item.title[:50]} (key: {item_key})")
+            logger.info(f"  ✓ Created: {cleaned_title[:50]} (key: {item_key})")
             return item_key
         # Check for success in "success" key as well (pyzotero variations)
         elif result and len(result.get("success", {})) > 0:
             item_key = list(result["success"].keys())[0]
-            logger.info(f"  ✓ Created: {rss_item.title[:50]} (key: {item_key})")
+            logger.info(f"  ✓ Created: {cleaned_title[:50]} (key: {item_key})")
             return item_key
         else:
             logger.warning(
-                f"  ✗ Failed to create: {rss_item.title[:50]} - Result: {result}"
+                f"  ✗ Failed to create: {cleaned_title[:50]} - Result: {result}"
             )
             return None
 
     except Exception as e:
-        logger.error(f"  ✗ Error creating item '{rss_item.title[:50]}': {e}")
+        logger.error(f"  ✗ Error creating item '{log_title[:50]}': {e}")
         return None
 
 
