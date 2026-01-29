@@ -102,15 +102,35 @@ class GmailClient:
                 creds = None
 
         # Priority 2: Interactive OAuth flow (requires browser)
-        # Only run if GMAIL_TOKEN_JSON not provided and credentials file exists
-        if not creds and self.credentials_path.exists():
-            if not token_json_env:
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    str(self.credentials_path), SCOPES
-                )
-                # Cast to Credentials since flow.run_local_server returns a compatible type
-                creds = cast(Credentials, flow.run_local_server(port=0))
-                self._save_token(creds)
+        # Only run if GMAIL_TOKEN_JSON not provided and credentials file exists (or in env)
+        if not creds:
+            # Check for GMAIL_CREDENTIALS_JSON in env
+            creds_json_env = os.getenv("GMAIL_CREDENTIALS_JSON")
+            if creds_json_env:
+                try:
+                    if creds_json_env.startswith("'") and creds_json_env.endswith("'"):
+                        creds_json_env = creds_json_env[1:-1]
+
+                    config = json.loads(creds_json_env)
+                    flow = InstalledAppFlow.from_client_config(config, SCOPES)
+                    creds = cast(Credentials, flow.run_local_server(port=0))
+                    self._save_token(creds)
+
+                    # Log the new token so user can save it to env
+                    logger.info("New token obtained. Please save to GMAIL_TOKEN_JSON:")
+                    logger.info(creds.to_json())
+
+                except Exception as e:
+                    logger.error(f"Failed to run interactive auth flow from env: {e}")
+
+            elif self.credentials_path.exists():
+                if not token_json_env:
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        str(self.credentials_path), SCOPES
+                    )
+                    # Cast to Credentials since flow.run_local_server returns a compatible type
+                    creds = cast(Credentials, flow.run_local_server(port=0))
+                    self._save_token(creds)
 
         # Validate final result
         if not creds or not creds.valid:
