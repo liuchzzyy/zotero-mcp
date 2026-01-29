@@ -304,6 +304,36 @@ class GmailClient:
         headers = message.get("payload", {}).get("headers", [])
         return {h["name"]: h["value"] for h in headers}
 
+    async def mark_as_read(self, message_id: str) -> bool:
+        """
+        Mark message as read (remove UNREAD label).
+
+        Args:
+            message_id: Gmail message ID
+
+        Returns:
+            True if successful
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: self.service.users()
+                .messages()
+                .modify(
+                    userId="me",
+                    id=message_id,
+                    body={"removeLabelIds": ["UNREAD"]},
+                )
+                .execute(),
+            )
+            logger.info(f"Marked message as read: {message_id}")
+            return True
+
+        except HttpError as e:
+            logger.error(f"Failed to mark message {message_id} as read: {e}")
+            return False
+
     async def trash_message(self, message_id: str) -> bool:
         """
         Move message to trash (recoverable).

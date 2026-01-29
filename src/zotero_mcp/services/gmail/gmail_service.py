@@ -547,6 +547,15 @@ class GmailService:
                 logger.error(f"Failed to import item '{rss_item.title[:50]}': {e}")
                 result.errors.append(f"Import failed: {rss_item.title[:50]}")
 
+        # Mark processed emails as read
+        if processed_email_ids:
+            for email_id in processed_email_ids:
+                try:
+                    await self.gmail_client.mark_as_read(email_id)
+                    await asyncio.sleep(0.1)  # Rate limiting
+                except Exception as e:
+                    logger.error(f"Failed to mark email {email_id} as read: {e}")
+
         # Delete/trash processed emails
         if delete_after and processed_email_ids:
             for email_id in processed_email_ids:
