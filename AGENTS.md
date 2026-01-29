@@ -84,6 +84,42 @@ The codebase follows a layered architecture to separate concerns:
 - Use `asyncio` for concurrency where appropriate.
 - Avoid blocking calls in the main event loop.
 
+## 📚 Task#1 Workflow Implementation
+
+The project now supports a complete 3-phase workflow for automated research paper management:
+
+### Phase 1: Ingestion (RSS/Gmail → AI Filter → Zotero)
+```bash
+# RSS ingestion
+zotero-mcp ingest rss --feeds <feed_urls> --collection <name>
+
+# Gmail ingestion
+zotero-mcp ingest gmail --collection <name>
+```
+- Fetches content from RSS feeds or Gmail
+- Uses AI to filter based on `RSS_PROMPT` configuration
+- Saves relevant items to `ZOTERO_INBOX_COLLECTION`
+
+### Phase 2: Analysis (Inbox → AI Analysis → Processed)
+- Enhanced `WorkflowService.batch_analyze()` with:
+  - `delete_old_notes=True` parameter
+  - `move_to_collection="01_SHORTTERMS"` parameter
+- Analyzes PDFs, generates new notes, deletes old ones, moves items
+
+### Phase 3: Global Scan (Library → Find Unprocessed → Analyze)
+```bash
+zotero-mcp scan --limit 20
+```
+- Scans entire library for items with PDF but no `#AI_Analyzed` tag
+- Triggers Phase 2 analysis for found items
+
+## 🔧 Configuration
+
+New environment variables added:
+- `RSS_PROMPT`: AI filtering prompt for Phase 1
+- `ZOTERO_INBOX_COLLECTION`: Source collection (default: "00_INBOXS")
+- `ZOTERO_PROCESSED_COLLECTION`: Target collection (default: "01_SHORTTERMS")
+
 ### 5. Error Handling
 - Use `try/except` blocks in Clients and Services to catch external errors.
 - Log errors using `logger.error()` with context.
