@@ -7,8 +7,6 @@ filtering with AI, and importing to Zotero.
 
 from typing import Any
 
-from zotero_mcp.clients.gmail import GmailClient
-from zotero_mcp.clients.llm import get_llm_client
 from zotero_mcp.services.data_access import get_data_service
 
 

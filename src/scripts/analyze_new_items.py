@@ -289,9 +289,7 @@ async def main():
             logger.info("=" * 70)
 
             # Extract item keys that were successfully processed
-            processed_item_keys = [
-                r.item_key for r in result.results if r.success
-            ]
+            processed_item_keys = [r.item_key for r in result.results if r.success]
 
             await move_items_to_collection(
                 data_service, processed_item_keys, dest_collection_key
