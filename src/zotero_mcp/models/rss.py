@@ -27,3 +27,19 @@ class RSSFeed(BaseModel):
     description: str | None = None
     items: list[RSSItem] = Field(default_factory=list)
     last_updated: datetime | None = None
+
+
+class RSSProcessResult(BaseModel):
+    """Result of processing RSS feeds."""
+
+    feeds_fetched: int = Field(default=0, description="Number of feeds fetched")
+    items_found: int = Field(default=0, description="Total items found across feeds")
+    items_after_date_filter: int = Field(
+        default=0, description="Items within date range"
+    )
+    items_filtered: int = Field(default=0, description="Items passing AI filter")
+    items_imported: int = Field(
+        default=0, description="Items successfully imported to Zotero"
+    )
+    items_duplicate: int = Field(default=0, description="Duplicate items skipped")
+    errors: list[str] = Field(default_factory=list, description="Errors encountered")

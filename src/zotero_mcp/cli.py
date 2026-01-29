@@ -4,6 +4,8 @@ Command-line interface for Zotero MCP server.
 
 import argparse
 import json
+import logging
+import os
 from pathlib import Path
 import shutil
 import sys
@@ -252,6 +254,16 @@ def main():
 
     args = parser.parse_args()
 
+    # Wire up DEBUG env var to logging
+    if os.getenv("DEBUG", "").lower() in ("true", "1", "yes"):
+        logging.basicConfig(
+            level=logging.DEBUG, format="%(name)s %(levelname)s: %(message)s"
+        )
+    else:
+        logging.basicConfig(
+            level=logging.INFO, format="%(name)s %(levelname)s: %(message)s"
+        )
+
     if not args.command:
         args.command = "serve"
         args.transport = "stdio"
@@ -399,7 +411,7 @@ def main():
 
             service = RSSService()
             try:
-                asyncio.run(
+                result = asyncio.run(
                     service.process_rss_workflow(
                         opml_path=args.opml,
                         prompt_path=args.prompt,
@@ -409,6 +421,20 @@ def main():
                         dry_run=args.dry_run,
                     )
                 )
+
+                print("\n=== RSS Processing Results ===")
+                print(f"  Feeds fetched: {result.feeds_fetched}")
+                print(f"  Items found: {result.items_found}")
+                print(f"  Items after date filter: {result.items_after_date_filter}")
+                print(f"  Items after AI filter: {result.items_filtered}")
+                print(f"  Items imported: {result.items_imported}")
+                print(f"  Items duplicate: {result.items_duplicate}")
+
+                if result.errors:
+                    print(f"\nErrors ({len(result.errors)}):")
+                    for err in result.errors[:5]:
+                        print(f"  - {err}")
+
             except Exception as e:
                 print(f"Error: {e}")
                 sys.exit(1)
@@ -446,8 +472,11 @@ def main():
             from zotero_mcp.services.gmail.gmail_service import GmailService
 
             if not args.sender and not args.subject and not args.query:
-                print("Error: Must specify --sender, --subject, or --query")
-                sys.exit(1)
+                args.query = "is:unread"
+                print(
+                    "Warning: No --sender, --subject, or --query specified. "
+                    'Defaulting to --query "is:unread"'
+                )
 
             service = GmailService()
             try:

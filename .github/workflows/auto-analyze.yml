@@ -41,7 +41,7 @@ on:
 jobs:
   # Job 1: Analyze new items in staging collection and move to processing
   analyze-new-items:
-    if: always() && (github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'analyze-new') || (github.event_name == 'schedule' && github.event.schedule == '0 22 * * *'))
+    if: github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'analyze-new') || (github.event_name == 'schedule' && github.event.schedule == '0 17 * * *')
     runs-on: ubuntu-latest
     
     environment: production
@@ -83,8 +83,17 @@ jobs:
           echo "Debug: ${DEBUG:-false}"
           echo ""
           
-          uv run python src/scripts/analyze_new_items.py
-      
+          uv run python src/scripts/analyze_new_items.py 2>&1 | tee analysis.log
+
+          # Write step summary
+          echo "## New Item Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time:** $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S CST')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Max Items:** ${MAX_ITEMS:-all}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dry Run:** ${DRY_RUN:-false}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          tail -20 analysis.log >> $GITHUB_STEP_SUMMARY || true
+
       - name: Upload Analysis Logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -155,8 +164,17 @@ jobs:
           echo "Debug: ${DEBUG:-false}"
           echo ""
           
-          uv run python src/scripts/organize_existing_items.py
-      
+          uv run python src/scripts/organize_existing_items.py 2>&1 | tee organize.log
+
+          # Write step summary
+          echo "## Organize Existing Items" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time:** $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S CST')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Max Items:** ${MAX_ITEMS:-all}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dry Run:** ${DRY_RUN:-false}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          tail -20 organize.log >> $GITHUB_STEP_SUMMARY || true
+
       - name: Upload Analysis Logs
         if: always()
         uses: actions/upload-artifact@v4

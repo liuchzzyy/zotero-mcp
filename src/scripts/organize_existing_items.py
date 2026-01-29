@@ -6,7 +6,7 @@ This script is designed to run in GitHub Actions on a schedule.
 It processes existing items in all collections (excluding staging collection):
 1. Filters for items with both PDF and notes but no tags
 2. Deletes old notes (moves to trash)
-3. Re-analyzes with AI
+3. Re-analyzes with AI via WorkflowService
 4. Adds tags to processed items
 
 Requirements:
@@ -28,9 +28,10 @@ import sys
 # Setup path to import zotero_mcp modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from zotero_mcp.clients.llm import get_llm_client
 from zotero_mcp.services.analysis_status import AnalysisStatusService
 from zotero_mcp.services.data_access import get_data_service
+from zotero_mcp.services.workflow import WorkflowService
+from zotero_mcp.utils.helpers import check_has_pdf
 
 # Configure logging
 logging.basicConfig(
@@ -43,66 +44,17 @@ logger = logging.getLogger(__name__)
 # Configuration
 EXCLUDED_COLLECTION_NAME = "00_INBOXS"  # Don't process items here
 TAG_TO_ADD = "AI分析"  # Tag to add after successful analysis
-MAX_ITEMS = None  # None = process all items
 
+# Runtime options from environment variables
+_max_items_env = os.getenv("MAX_ITEMS", "").strip()
+MAX_ITEMS: int | None = int(_max_items_env) if _max_items_env else None
+DRY_RUN = os.getenv("DRY_RUN", "false").lower() == "true"
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
-async def check_has_pdf(data_service, item_key: str) -> bool:
-    """
-    Check if an item has at least one PDF attachment.
-
-    Args:
-        data_service: DataAccessService instance
-        item_key: Zotero item key
-
-    Returns:
-        True if item has PDF attachment, False otherwise
-    """
-    try:
-        children = await data_service.get_item_children(item_key)
-        for child in children:
-            child_data = child.get("data", {})
-            if child_data.get("itemType") == "attachment":
-                content_type = child_data.get("contentType", "")
-                if content_type == "application/pdf":
-                    return True
-        return False
-    except Exception as e:
-        logger.warning(f"Error checking PDF for item {item_key}: {e}")
-        return False
-
-
-async def check_has_notes(data_service, item_key: str) -> bool:
-    """
-    Check if an item has at least one note.
-
-    Args:
-        data_service: DataAccessService instance
-        item_key: Zotero item key
-
-    Returns:
-        True if item has notes, False otherwise
-    """
-    try:
-        notes = await data_service.get_notes(item_key)
-        return len(notes) > 0
-    except Exception as e:
-        logger.warning(f"Error checking notes for item {item_key}: {e}")
-        return False
-
-
-async def check_has_tags(item: dict) -> bool:
-    """
-    Check if an item has any tags.
-
-    Args:
-        item: Item object
-
-    Returns:
-        True if item has tags, False otherwise
-    """
-    item_data = item.get("data", {})
-    tags = item_data.get("tags", [])
-    return len(tags) > 0
+# Adjust logging level for debug mode
+if DEBUG:
+    logging.getLogger().setLevel(logging.DEBUG)
+    logger.setLevel(logging.DEBUG)
 
 
 async def delete_item_notes(data_service, item_key: str):
@@ -256,12 +208,41 @@ async def get_all_items_except_excluded(data_service, excluded_collection_key: s
     return all_items
 
 
+async def get_collection_key_for_item(data_service, item_key: str, collections):
+    """
+    Find which collection an item belongs to.
+
+    Args:
+        data_service: DataAccessService instance
+        item_key: Zotero item key
+        collections: List of collection dicts
+
+    Returns:
+        Collection key, or None if not found
+    """
+    try:
+        item = await data_service.get_item(item_key)
+        item_collections = item.get("data", {}).get("collections", [])
+        if item_collections:
+            return item_collections[0]
+    except Exception:
+        pass
+    return None
+
+
 async def main():
     """Main execution function"""
 
     logger.info("=" * 70)
     logger.info("Automated Existing Item Re-analysis")
     logger.info("=" * 70)
+
+    # Show runtime options
+    logger.info(
+        f"Mode: {'DRY RUN (preview only)' if DRY_RUN else 'LIVE (will analyze)'}"
+    )
+    logger.info(f"Max items: {MAX_ITEMS if MAX_ITEMS else 'unlimited'}")
+    logger.info(f"Debug: {DEBUG}")
 
     # Verify environment variables
     required_vars = {
@@ -283,6 +264,7 @@ async def main():
         # Initialize services
         logger.info("Initializing services...")
         data_service = get_data_service()
+        workflow_service = WorkflowService()
         logger.info("Services initialized successfully")
 
         # Find excluded collection
@@ -328,17 +310,34 @@ async def main():
             logger.info(f"Limiting to {MAX_ITEMS} items")
             items_to_process = items_to_process[:MAX_ITEMS]
 
-        # Delete old notes before re-analysis
+        # Delete old notes before re-analysis (skip in DRY_RUN)
         logger.info("")
         logger.info("=" * 70)
-        logger.info("Deleting old notes")
+        logger.info(
+            "Deleting old notes" + (" (DRY RUN - skipping)" if DRY_RUN else "")
+        )
         logger.info("=" * 70)
 
         for item in items_to_process:
             item_key = item.get("key", "")
             item_title = item.get("data", {}).get("title", "Untitled")
-            logger.info(f"Processing: {item_title[:50]}")
-            await delete_item_notes(data_service, item_key)
+            if DRY_RUN:
+                logger.info(f"  [DRY RUN] Would delete notes for: {item_title[:50]}")
+            else:
+                logger.info(f"Processing: {item_title[:50]}")
+                await delete_item_notes(data_service, item_key)
+
+        # Group items by collection for batch_analyze
+        # Build a map: collection_key -> list of item_keys
+        collection_items: dict[str, list[str]] = {}
+        for item in items_to_process:
+            item_key = item.get("key", "")
+            item_collections = item.get("data", {}).get("collections", [])
+            if item_collections:
+                coll_key = item_collections[0]
+                collection_items.setdefault(coll_key, []).append(item_key)
+            else:
+                logger.warning(f"  Item {item_key} has no collection, skipping")
 
         # Progress callback
         async def progress_callback(current: int, total: int, item_title: str):
@@ -347,120 +346,77 @@ async def main():
                 f"Progress: [{current}/{total}] ({percentage:.1f}%) - {item_title[:50]}"
             )
 
-        # Run batch re-analysis
+        # Run batch re-analysis per collection using WorkflowService
         logger.info("")
         logger.info("=" * 70)
-        logger.info("Starting batch re-analysis with DeepSeek AI")
+        logger.info(
+            "Starting batch re-analysis with DeepSeek AI"
+            + (" (DRY RUN)" if DRY_RUN else "")
+        )
         logger.info("=" * 70)
         logger.info(f"Items to re-analyze: {len(items_to_process)}")
+        logger.info(f"Across {len(collection_items)} collections")
         logger.info("LLM Provider: DeepSeek")
         logger.info("")
 
-        # Since we're processing items from multiple collections,
-        # we'll use 'recent' source type and filter manually
-        # Note: This is a limitation of the current workflow API
-        # For now, we'll track successes manually
+        all_processed_keys = []
+        total_processed = 0
+        total_skipped = 0
+        total_failed = 0
 
-        processed_items = []
-        failed_items = []
+        for coll_key, item_keys in collection_items.items():
+            logger.info(f"Processing collection {coll_key} ({len(item_keys)} items)...")
 
-        # Initialize LLM client
-        try:
-            llm_client = get_llm_client(provider="deepseek", model=None)
-        except Exception as e:
-            logger.error(f"Failed to initialize LLM client: {e}")
-            sys.exit(1)
+            result = await workflow_service.batch_analyze(
+                source="collection",
+                collection_key=coll_key,
+                limit=len(item_keys),
+                skip_existing=False,  # Notes were already deleted
+                include_annotations=True,
+                llm_provider="deepseek",
+                llm_model=None,
+                template=None,
+                dry_run=DRY_RUN,
+                progress_callback=progress_callback,
+            )
 
-        for idx, item in enumerate(items_to_process):
-            item_key = item.get("key", "")
-            item_title = item.get("data", {}).get("title", "Untitled")
+            # Collect successfully processed item keys
+            for r in result.results:
+                if r.success and not r.skipped:
+                    all_processed_keys.append(r.item_key)
 
-            await progress_callback(idx + 1, len(items_to_process), item_title)
+            total_processed += result.processed
+            total_skipped += result.skipped
+            total_failed += result.failed
 
-            try:
-                # Get item metadata and fulltext
-                item_data = await data_service.get_item(item_key)
-                metadata = item_data.get("data", {})
-                fulltext = await data_service.get_fulltext(item_key)
-
-                if not fulltext:
-                    logger.warning(f"  No fulltext for {item_title[:50]}, skipping")
-                    failed_items.append(item_key)
-                    continue
-
-                # Get PDF annotations
-                children = await data_service.get_item_children(item_key)
-                annotations = []
-                for child in children:
-                    child_data = child.get("data", {})
-                    if child_data.get("itemType") == "attachment":
-                        # Try to get annotations from this attachment
-                        try:
-                            child_key = child_data.get("key", "")
-                            attachment_annotations = await data_service.get_annotations(
-                                child_key
-                            )
-                            annotations.extend(attachment_annotations)
-                        except Exception:
-                            logger.debug("  No annotations for attachment")
-
-                # Call LLM to analyze the paper
-                logger.info(f"  Analyzing {item_title[:50]} with DeepSeek AI...")
-
-                # Get item metadata for analysis
-                creators = metadata.get("creators", [])
-                authors = (
-                    ", ".join([c.get("name", "") for c in creators])
-                    if creators
-                    else None
-                )
-
-                analysis_markdown = await llm_client.analyze_paper(
-                    title=metadata.get("title", ""),
-                    authors=authors,
-                    journal=metadata.get("publicationTitle"),
-                    date=metadata.get("date"),
-                    doi=metadata.get("doi"),
-                    fulltext=fulltext,
-                    annotations=annotations if annotations else None,
-                    template=None,  # Use default template
-                )
-
-                # Convert Markdown to HTML for Zotero note
-                from zotero_mcp.utils.markdown_html import markdown_to_html
-
-                note_html = markdown_to_html(analysis_markdown)
-
-                # Create note
-                logger.info(f"  Creating analysis note for {item_title[:50]}...")
-                await data_service.item_service.create_note(
-                    parent_key=item_key, content=note_html, tags=["AI分析"]
-                )
-
-                processed_items.append(item_key)
-                logger.info(f"  ✓ Successfully analyzed and tagged {item_title[:50]}")
-
-            except Exception as e:
-                logger.error(f"  Error processing {item_title[:50]}: {e}")
-                failed_items.append(item_key)
+            if result.error:
+                logger.error(f"  Error in collection {coll_key}: {result.error}")
 
         # Display analysis results
         logger.info("")
         logger.info("=" * 70)
-        logger.info("Re-analysis Complete")
+        logger.info("Re-analysis Complete" + (" (DRY RUN)" if DRY_RUN else ""))
         logger.info("=" * 70)
         logger.info(f"Total items: {len(items_to_process)}")
-        logger.info(f"Successfully processed: {len(processed_items)}")
-        logger.info(f"Failed: {len(failed_items)}")
+        logger.info(
+            f"{'Would process' if DRY_RUN else 'Successfully processed'}: {total_processed}"
+        )
+        logger.info(f"Skipped: {total_skipped}")
+        logger.info(f"Failed: {total_failed}")
 
-        # Add tags to successfully processed items
-        if processed_items:
+        # Add tags to successfully processed items (skip in DRY_RUN)
+        if all_processed_keys and not DRY_RUN:
             logger.info("")
             logger.info("=" * 70)
             logger.info("Adding tags to processed items")
             logger.info("=" * 70)
 
-            await add_tags_to_items(data_service, processed_items, [TAG_TO_ADD])
+            await add_tags_to_items(data_service, all_processed_keys, [TAG_TO_ADD])
+        elif all_processed_keys and DRY_RUN:
+            logger.info("")
+            logger.info(
+                f"[DRY RUN] Would add '{TAG_TO_ADD}' tag to {len(all_processed_keys)} items"
+            )
 
         logger.info("")
         logger.info("✓ Automated re-analysis and organization completed successfully")
