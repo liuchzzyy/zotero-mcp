@@ -101,6 +101,16 @@ class GmailClient:
                 logger.warning(f"Failed to refresh token: {e}")
                 creds = None
 
+        # In CI environments, fail fast instead of attempting interactive OAuth
+        is_ci = os.getenv("CI", "").lower() in ("true", "1", "yes")
+
+        if not creds and is_ci:
+            raise RuntimeError(
+                "Gmail credentials are invalid or expired in CI environment. "
+                "Update the GMAIL_TOKEN_JSON secret with a fresh token. "
+                "Run 'zotero-mcp gmail auth' locally to re-authenticate."
+            )
+
         # Priority 2: Interactive OAuth flow (requires browser)
         # Only run if GMAIL_TOKEN_JSON not provided and credentials file exists (or in env)
         if not creds:
@@ -134,6 +144,12 @@ class GmailClient:
 
         # Validate final result
         if not creds or not creds.valid:
+            if is_ci:
+                raise RuntimeError(
+                    "Gmail authentication failed in CI environment. "
+                    "Update the GMAIL_TOKEN_JSON secret with a fresh token."
+                )
+
             if not self.credentials_path.exists():
                 raise FileNotFoundError(
                     f"Gmail credentials not found at {self.credentials_path}. "

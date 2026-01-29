@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from zotero_mcp.services.analysis_status import AnalysisStatusService
 from zotero_mcp.services.data_access import get_data_service
 from zotero_mcp.services.workflow import WorkflowService
+from zotero_mcp.utils.helpers import check_has_pdf
 
 # Configure logging
 logging.basicConfig(
@@ -53,52 +54,6 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 if DEBUG:
     logging.getLogger().setLevel(logging.DEBUG)
     logger.setLevel(logging.DEBUG)
-
-
-async def check_has_pdf(data_service, item_key: str) -> bool:
-    """
-    Check if an item has at least one PDF attachment.
-
-    Args:
-        data_service: DataAccessService instance
-        item_key: Zotero item key
-
-    Returns:
-        True if item has PDF attachment, False otherwise
-    """
-    try:
-        children = await data_service.get_item_children(item_key)
-        for child in children:
-            child_data = child.get("data", {})
-            if child_data.get("itemType") == "attachment":
-                content_type = child_data.get("contentType", "")
-                if content_type == "application/pdf":
-                    return True
-        return False
-    except Exception as e:
-        logger.warning(f"Error checking PDF for item {item_key}: {e}")
-        return False
-
-
-def check_has_tags(item) -> bool:
-    """
-    Check if an item has any tags.
-
-    Args:
-        item: Item object (can be SearchResultItem Pydantic model or dict)
-
-    Returns:
-        True if item has tags, False otherwise
-    """
-    # Handle Pydantic model (SearchResultItem)
-    if hasattr(item, "tags"):
-        return len(item.tags) > 0
-    # Handle raw dict
-    if isinstance(item, dict):
-        item_data = item.get("data", {})
-        tags = item_data.get("tags", [])
-        return len(tags) > 0
-    return False
 
 
 async def filter_items_for_analysis(data_service, items):
@@ -334,10 +289,8 @@ async def main():
             logger.info("=" * 70)
 
             # Extract item keys that were successfully processed
-            # Note: WorkflowService doesn't return individual item results,
-            # so we move all items that were in the batch
             processed_item_keys = [
-                item.key for item in items_to_process[: result.processed]
+                r.item_key for r in result.results if r.success
             ]
 
             await move_items_to_collection(

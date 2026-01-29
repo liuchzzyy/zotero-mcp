@@ -8,6 +8,9 @@ import re
 # Precompiled regex for HTML tag removal
 _HTML_TAG_PATTERN = re.compile(r"<.*?>")
 
+# Shared DOI regex pattern used by RSS and Gmail services
+DOI_PATTERN = re.compile(r"10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.IGNORECASE)
+
 
 def format_creators(creators: list[dict[str, str]]) -> str:
     """

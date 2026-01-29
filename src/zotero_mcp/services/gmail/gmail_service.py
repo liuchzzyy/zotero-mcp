@@ -20,11 +20,9 @@ from zotero_mcp.clients.gmail import GmailClient
 from zotero_mcp.models.gmail import EmailItem, EmailMessage, GmailProcessResult
 from zotero_mcp.models.rss import RSSItem
 from zotero_mcp.services.rss.rss_filter import RSSFilter
+from zotero_mcp.utils.helpers import DOI_PATTERN
 
 logger = logging.getLogger(__name__)
-
-# DOI regex pattern
-DOI_PATTERN = re.compile(r"10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.IGNORECASE)
 
 
 class GmailService:

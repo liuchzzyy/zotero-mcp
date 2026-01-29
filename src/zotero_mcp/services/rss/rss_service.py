@@ -8,16 +8,14 @@ from xml.etree import ElementTree as ET
 
 import feedparser
 
-from zotero_mcp.models.rss import RSSFeed, RSSItem
+from zotero_mcp.models.rss import RSSFeed, RSSItem, RSSProcessResult
+from zotero_mcp.utils.helpers import DOI_PATTERN
 
 logger = logging.getLogger(__name__)
 
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 MAX_RETRIES = 5
-
-# DOI Regex pattern
-DOI_PATTERN = re.compile(r"10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.IGNORECASE)
 
 
 class RSSService:
@@ -293,11 +291,13 @@ class RSSService:
         days_back: int = 15,
         max_items: int | None = None,
         dry_run: bool = False,
-    ):
+    ) -> RSSProcessResult:
         """Full RSS fetching and importing workflow."""
         from zotero_mcp.services.data_access import get_data_service
         from zotero_mcp.services.metadata import MetadataService
         from zotero_mcp.services.rss.rss_filter import RSSFilter
+
+        result = RSSProcessResult()
 
         data_service = get_data_service()
         rss_filter = RSSFilter(prompt_file=prompt_path)
@@ -311,6 +311,11 @@ class RSSService:
 
         # Fetch feeds
         feeds = await self.fetch_feeds_from_opml(opml_path)
+        result.feeds_fetched = len(feeds)
+
+        # Count total items across all feeds
+        total_items = sum(len(feed.items) for feed in feeds)
+        result.items_found = total_items
 
         # Collect and filter by date
         cutoff = datetime.now() - timedelta(days=days_back) if days_back else None
@@ -324,13 +329,15 @@ class RSSService:
                     if not i.pub_date or (cutoff is None or i.pub_date >= cutoff)
                 ]
             )
+        result.items_after_date_filter = len(all_items)
 
         if not all_items:
             logger.info("No recent items found")
-            return
+            return result
 
         # AI filter
         relevant, _, _ = await rss_filter.filter_with_keywords(all_items, prompt_path)
+        result.items_filtered = len(relevant)
 
         # Sort and limit
         relevant.sort(key=lambda x: x.pub_date or datetime.min, reverse=True)
@@ -342,7 +349,13 @@ class RSSService:
             if dry_run:
                 logger.info(f"[DRY RUN] Would import: {item.title}")
                 continue
-            await self.create_zotero_item(
+            item_key = await self.create_zotero_item(
                 data_service, metadata_service, item, collection_key
             )
+            if item_key:
+                result.items_imported += 1
+            else:
+                result.items_duplicate += 1
             await asyncio.sleep(0.5)
+
+        return result
