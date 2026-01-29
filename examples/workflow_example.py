@@ -8,7 +8,7 @@ Usage:
     # Method 1: Use .env file (recommended)
     cp .env.example .env  # Copy template and fill in your credentials
     uv run python examples/workflow_example.py
-    
+
     # Method 2: Set environment variables directly
     ZOTERO_LIBRARY_ID=your_library_id \
     ZOTERO_API_KEY=your_api_key \

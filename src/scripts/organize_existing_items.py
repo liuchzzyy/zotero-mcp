@@ -313,9 +313,7 @@ async def main():
         # Delete old notes before re-analysis (skip in DRY_RUN)
         logger.info("")
         logger.info("=" * 70)
-        logger.info(
-            "Deleting old notes" + (" (DRY RUN - skipping)" if DRY_RUN else "")
-        )
+        logger.info("Deleting old notes" + (" (DRY RUN - skipping)" if DRY_RUN else ""))
         logger.info("=" * 70)
 
         for item in items_to_process:
