@@ -402,7 +402,7 @@ async def main():
                             )
                             annotations.extend(attachment_annotations)
                         except Exception:
-                            logger.debug(f"  No annotations for attachment")
+                            logger.debug("  No annotations for attachment")
 
                 # Call LLM to analyze the paper
                 logger.info(f"  Analyzing {item_title[:50]} with DeepSeek AI...")
