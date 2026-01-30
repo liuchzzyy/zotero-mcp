@@ -241,7 +241,7 @@ class GmailClient:
         if query:
             q = query
         else:
-            parts = []
+            parts = ["in:inbox"]
             if sender:
                 parts.append(f"from:{sender}")
             if subject:
