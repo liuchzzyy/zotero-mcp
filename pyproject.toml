@@ -33,36 +33,105 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
-# Core dependencies (alphabetically sorted)
+# ==============================================================================
+# DEPENDENCY MANAGEMENT
+# ==============================================================================
+#
+# Dependencies are organized into three categories:
+# 1. Core dependencies: Required for runtime functionality
+# 2. Optional dependencies: Not required but recommended for full functionality
+# 3. Development dependencies: Only needed for development and testing
+#
+# Security Updates:
+# - Run `uv pip list --outdated` to check for updates
+# - Run `uv pip update --upgrade` to update all packages
+# - Review security advisories at https://github.com/advisories
+#
+# Dependency Audit:
+# - Run `uv pip check` to check for dependency conflicts
+# - Run `pip-audit` to check for known vulnerabilities
+# ==============================================================================
+
+# -------------------- Core Dependencies --------------------
+#
+# These dependencies are required for the application to run.
+# They are installed automatically when the package is installed.
+#
+# To add a new core dependency:
+# 1. Add it below with version constraints
+# 2. Document why it's needed in the comment above
+# 3. Run `uv sync` to install it
+# 4. Update this section when adding/removing dependencies
+
 dependencies = [
-    "basedpyright>=1.37.2",
-    "beautifulsoup4>=4.14.3",
-    "chromadb>=0.4.0",
-    "fastmcp>=2.14.0",
-    "feedparser>=6.0.12",
-    "google-api-python-client>=2.100.0",
-    "google-auth-oauthlib>=1.2.0",
-    "google-generativeai>=0.3.0",
-    "lxml>=6.0.2",
-    "markitdown[pdf]",
-    "mcp>=1.2.0",
-    "openai>=1.0.0",
-    "pydantic>=2.0.0",
-    "python-dotenv>=1.0.0",
-    "pyyaml>=6.0.3",
-    "pyzotero>=1.5.0",
-    "requests>=2.28.0",
-    "tenacity>=9.1.2",
+    # MCP Server Framework
+    "fastmcp>=2.14.0",  # FastMCP framework for building MCP servers
+    "mcp>=1.2.0",  # Model Context Protocol SDK
+
+    # Zotero Integration
+    "pyzotero>=1.5.0",  # Zotero API client library
+
+    # AI/LLM Clients
+    "openai>=1.0.0",  # OpenAI API client (for GPT models)
+    "google-generativeai>=0.3.0",  # Google Gemini API client
+
+    # Data Processing
+    "beautifulsoup4>=4.14.3",  # HTML/XML parsing for web scraping
+    "feedparser>=6.0.12",  # RSS/Atom feed parsing
+    "pydantic>=2.0.0",  # Data validation and settings management
+
+    # Semantic Search
+    "chromadb>=0.4.0",  # Vector database for semantic search
+
+    # Gmail Integration
+    "google-api-python-client>=2.100.0",  # Google API client for Gmail
+    "google-auth-oauthlib>=1.2.0",  # OAuth flow for Gmail authentication
+
+    # HTTP Clients
+    "httpx>=0.24.0",  # Async HTTP client (Crossref, OpenAlex APIs)
+    "requests>=2.28.0",  # Sync HTTP client (fallback)
+
+    # Configuration
+    "python-dotenv>=1.0.0",  # Load environment variables from .env files
+    "pyyaml>=6.0.3",  # Parse YAML configuration files
+
+    # Document Processing
+    "markitdown[pdf]>=0.0.1",  # PDF to Markdown conversion
 ]
+
+# -------------------- Development Dependencies --------------------
+#
+# These dependencies are only needed for development and testing.
+# They are NOT installed when the package is installed in production.
+#
+# To install development dependencies:
+#   uv sync --group dev
+#   uv sync --all  # Install all dev groups
 
 [dependency-groups]
 dev = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.0.0",
-    "ruff>=0.14.13",
-    "ty>=0.0.12",
+    # Testing Framework
+    "pytest>=7.0.0",  # Testing framework
+    "pytest-asyncio>=0.21.0",  # Async support for pytest
+    "pytest-cov>=4.0.0",  # Code coverage plugin for pytest
+
+    # Code Quality
+    "ruff>=0.14.13",  # Fast Python linter and formatter (black, isort, flake8 replacement)
+    "ty>=0.0.12",  # Fast type checker (mypy replacement)
+    "basedpyright>=1.37.2",  # Pyright type checker (alternative to mypy)
+
+    # Security
+    "pip-audit>=2.0.0",  # Audit dependencies for known vulnerabilities
 ]
+
+# -------------------- Optional Dependencies --------------------
+#
+# These dependencies are not required but provide additional functionality.
+# Install them manually if needed:
+#   uv pip install <package>
+#
+# Optional dependencies are not listed here to keep the package lightweight.
+# Users can install them as needed based on their use case.
 
 [project.urls]
 Homepage = "https://github.com/54yyyu/zotero-mcp"
