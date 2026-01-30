@@ -44,7 +44,7 @@ class TestCLILLMClientAnalyze:
     @patch("zotero_mcp.clients.cli_llm.shutil.which", return_value="/usr/bin/claude")
     async def test_analyze_paper_builds_prompt(self, mock_which, client):
         """Test that analyze_paper writes correct content to temp file."""
-        written_content = None
+        written_content = ""
 
         async def mock_run_cli(content):
             nonlocal written_content
@@ -71,7 +71,7 @@ class TestCLILLMClientAnalyze:
     @patch("zotero_mcp.clients.cli_llm.shutil.which", return_value="/usr/bin/claude")
     async def test_analyze_with_custom_template(self, mock_which, client):
         """Test custom template is included in prompt."""
-        written_content = None
+        written_content = ""
 
         async def mock_run_cli(content):
             nonlocal written_content
@@ -96,7 +96,7 @@ class TestCLILLMClientAnalyze:
     @patch("zotero_mcp.clients.cli_llm.shutil.which", return_value="/usr/bin/claude")
     async def test_analyze_with_annotations(self, mock_which, client):
         """Test annotations are included in prompt."""
-        written_content = None
+        written_content = ""
 
         async def mock_run_cli(content):
             nonlocal written_content
