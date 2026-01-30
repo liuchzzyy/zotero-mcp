@@ -204,6 +204,35 @@ class RSSService:
         """
         return helper_clean_title(title)
 
+    async def _zotero_api_call_with_retry(
+        self,
+        func,
+        *,
+        max_retries: int = 3,
+        base_delay: float = 2.0,
+        description: str = "Zotero API call",
+    ):
+        """Execute a Zotero API call with retry and exponential backoff."""
+        for attempt in range(max_retries):
+            try:
+                return await func()
+            except Exception as e:
+                error_msg = str(e).lower()
+                is_retryable = any(
+                    keyword in error_msg
+                    for keyword in ["timed out", "timeout", "503", "429", "connection"]
+                )
+                if not is_retryable or attempt == max_retries - 1:
+                    raise
+                delay = base_delay * (2 ** attempt)
+                logger.warning(
+                    f"  ↻ {description} failed (attempt {attempt + 1}/{max_retries}): "
+                    f"{e}. Retrying in {delay:.0f}s..."
+                )
+                await asyncio.sleep(delay)
+        # Unreachable, but satisfies type checker
+        raise RuntimeError(f"{description} failed after {max_retries} retries")
+
     async def create_zotero_item(
         self,
         data_service: "DataAccessService",
@@ -218,16 +247,22 @@ class RSSService:
             log_title = cleaned_title
 
             # 1. Check if item already exists by URL
-            existing_by_url = await data_service.search_items(
-                query=rss_item.link, limit=1, qmode="everything"
+            existing_by_url = await self._zotero_api_call_with_retry(
+                lambda: data_service.search_items(
+                    query=rss_item.link, limit=1, qmode="everything"
+                ),
+                description=f"Search URL '{cleaned_title[:30]}'",
             )
             if existing_by_url and len(existing_by_url) > 0:
                 logger.info(f"  ⊘ Duplicate (URL): {cleaned_title[:50]}")
                 return None
 
             # 2. Check if item already exists by Title (fallback)
-            existing_by_title = await data_service.search_items(
-                query=cleaned_title, qmode="titleCreatorYear", limit=1
+            existing_by_title = await self._zotero_api_call_with_retry(
+                lambda: data_service.search_items(
+                    query=cleaned_title, qmode="titleCreatorYear", limit=1
+                ),
+                description=f"Search title '{cleaned_title[:30]}'",
             )
             if existing_by_title and len(existing_by_title) > 0:
                 found_title = existing_by_title[0].title
@@ -266,7 +301,10 @@ class RSSService:
                     }
                 ]
 
-            result = await data_service.create_items([item_data])
+            result = await self._zotero_api_call_with_retry(
+                lambda: data_service.create_items([item_data]),
+                description=f"Create item '{cleaned_title[:30]}'",
+            )
 
             if result and len(result.get("successful", {})) > 0:
                 item_key = list(result["successful"].keys())[0]
