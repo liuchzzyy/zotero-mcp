@@ -18,12 +18,7 @@ This script will:
 import asyncio
 import sys
 
-try:
-    from zotero_mcp.clients.gmail import GmailClient
-except ImportError as e:
-    print(f"❌ Import error: {e}")
-    print("Please run: uv sync")
-    sys.exit(1)
+from zotero_mcp.clients.gmail import GmailClient
 
 
 async def test_connection(client: GmailClient) -> bool:
