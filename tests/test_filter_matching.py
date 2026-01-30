@@ -77,7 +77,7 @@ def test_matching():
     print(f"Results: {passed} passed, {failed} failed")
     print("=" * 70)
 
-    return failed == 0
+    assert failed == 0, f"{failed} test(s) failed"
 
 
 def test_with_real_data():
