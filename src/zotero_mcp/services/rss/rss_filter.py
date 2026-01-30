@@ -27,7 +27,9 @@ from zotero_mcp.models.rss import RSSItem
 
 logger = logging.getLogger(__name__)
 
-KEYWORDS_CACHE_FILE = Path("RSS/keywords_cache.json")
+# Use project root (where pyproject.toml lives) as base for cache
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+KEYWORDS_CACHE_FILE = _PROJECT_ROOT / "RSS" / "keywords_cache.json"
 
 
 class RSSFilter:

@@ -12,6 +12,30 @@ _HTML_TAG_PATTERN = re.compile(r"<.*?>")
 DOI_PATTERN = re.compile(r"10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.IGNORECASE)
 
 
+def clean_title(title: str) -> str:
+    """
+    Clean article title by removing common prefixes.
+
+    Removes prefixes like [DOI], [PDF], etc. from article titles.
+
+    Args:
+        title: The raw title string.
+
+    Returns:
+        Cleaned title string.
+
+    Examples:
+        >>> clean_title("[DOI] 10.1234/example The paper title")
+        '10.1234/example The paper title'
+        >>> clean_title("[PDF] Research Article")
+        'Research Article'
+    """
+    if not title:
+        return ""
+    cleaned = re.sub(r"^\[.*?\]\s*", "", title)
+    return cleaned.strip()
+
+
 def format_creators(creators: list[dict[str, str]]) -> str:
     """
     Format creator names into a string.

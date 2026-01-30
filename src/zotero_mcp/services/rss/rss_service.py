@@ -1,15 +1,19 @@
 import asyncio
 from datetime import datetime, timedelta
 import logging
-import re
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from xml.etree import ElementTree as ET
 
 import feedparser
 
 from zotero_mcp.models.rss import RSSFeed, RSSItem, RSSProcessResult
 from zotero_mcp.utils.helpers import DOI_PATTERN
+from zotero_mcp.utils.helpers import clean_title as helper_clean_title
+
+if TYPE_CHECKING:
+    from zotero_mcp.services.data_access import DataAccessService
+    from zotero_mcp.services.metadata import MetadataService
 
 logger = logging.getLogger(__name__)
 
@@ -193,16 +197,17 @@ class RSSService:
 
     @staticmethod
     def clean_title(title: str) -> str:
-        """Clean article title by removing common prefixes."""
-        if not title:
-            return ""
-        cleaned = re.sub(r"^\[.*?\]\s*", "", title)
-        return cleaned.strip()
+        """
+        Clean article title by removing common prefixes.
+
+        Delegates to utils.helpers.clean_title for backward compatibility.
+        """
+        return helper_clean_title(title)
 
     async def create_zotero_item(
         self,
-        data_service,
-        metadata_service,
+        data_service: "DataAccessService",
+        metadata_service: "MetadataService",
         rss_item: RSSItem,
         collection_key: str,
     ) -> str | None:

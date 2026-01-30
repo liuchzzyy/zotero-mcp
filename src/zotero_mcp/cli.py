@@ -424,6 +424,21 @@ def main():
             import asyncio
 
             from zotero_mcp.services.rss.rss_service import RSSService
+            from zotero_mcp.utils.config import get_rss_config
+
+            # Apply env var defaults for CLI args not explicitly provided
+            rss_config = get_rss_config()
+            if args.opml == "RSS/RSS_official.opml":
+                args.opml = rss_config.get("opml_path", "RSS/RSS_official.opml")
+                print(f"Using RSS_OPML_PATH: {args.opml}")
+            if args.collection == "00_INBOXS":
+                config_collection = rss_config.get("collection", "00_INBOXS")
+                if config_collection:
+                    args.collection = config_collection
+            if args.days == 15:
+                config_days = rss_config.get("days_back", 15)
+                if config_days != 15:
+                    args.days = config_days
 
             service = RSSService()
             try:
