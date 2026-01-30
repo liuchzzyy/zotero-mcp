@@ -43,13 +43,12 @@ Layered architecture with strict separation of concerns:
 - **Entry** (`server.py`, `cli.py`) - FastMCP initialization, CLI commands, tool registration
 - **Tools** (`tools/`) - Thin MCP tool wrappers (`@mcp.tool`) that parse inputs and delegate to Services
 - **Services** (`services/`) - Business logic layer
-  - `DataAccessService` - Central facade ("God Service") that selects backends
-  - Backend selection: Local DB vs Zotero API vs BetterBibTeX
+  - `DataAccessService` - Central facade that selects backends (Local DB / Zotero API / BetterBibTeX)
   - Built-in caching (5-min TTL) for performance
   - `SemanticSearch` - ChromaDB vector search management
   - `WorkflowService` - Batch analysis with checkpoint/resume
   - `MetadataService` - Crossref/OpenAlex integration
-  - `RSSFilter` - RSS feed filtering and processing
+  - `RSSFilter` / `RSSService` - RSS feed filtering and processing
   - `GmailService` - Gmail integration for paper collection
 
 - **Clients** (`clients/`) - Low-level external service interfaces
@@ -60,17 +59,28 @@ Layered architecture with strict separation of concerns:
   - `GmailClient` - Gmail API integration
   - `CrossrefClient` - Crossref API (academic metadata)
   - `OpenAlexClient` - OpenAlex API (fallback metadata)
+  - `BetterBibTexClient` - BetterBibTeX integration
 
 - **Models** (`models/`) - Pydantic models for type-safe data exchange
   - All tool responses extend `BaseResponse` with `success`/`error` fields
   - Consistent structured output across all tools
 
+- **Formatters** (`formatters/`) - Output formatters
+  - `MarkdownFormatter` - Markdown output
+  - `BibTeXFormatter` - BibTeX citation output
+  - `JSONFormatter` - JSON output
+
 - **Utils** (`utils/`) - Shared utilities
   - `config.py` - Centralized configuration with caching (5-min TTL)
-  - `logging_config.py` - Unified logging system
+  - `logging_config.py` - Unified logging system with task-level logging
   - `templates.py` - Configurable AI analysis templates
-  - `beautify.py` - Note formatting and styling
+  - `beautify.py` - Note formatting and styling (orange-heart theme)
   - `helpers.py` - Common helper functions
+  - `errors.py` - Custom error definitions
+  - `cache.py` - Caching utilities
+  - `metrics.py` - Performance metrics
+  - `markdown_html.py` - Markdown to HTML conversion
+  - `zotero_mapper.py` - Zotero data mapping
 
 ### Key Patterns
 
@@ -89,7 +99,8 @@ Layered architecture with strict separation of concerns:
 
 ## Code Style
 
-- **Linter**: Ruff (modern replacement for black, isort, flake8)
+- **Linter/Formatter**: Ruff (replaces black, isort, flake8)
+- **Type Checker**: ty (fast type checker)
 - **Line length**: 88 characters
 - **Target Python**: 3.10+
 - **Type hints**: Required on all functions
@@ -178,20 +189,11 @@ log_task_end(logger, "Task Name", items_processed=95)
 ### Running Tests
 
 ```bash
-# Run all tests
-uv run pytest
-
-# Run specific file
-uv run pytest tests/test_config.py
-
-# Run specific test
-uv run pytest -k "test_load_config"
-
-# Verbose output
-uv run pytest -v
-
-# With coverage
-uv run pytest --cov=src
+uv run pytest                         # Run all tests
+uv run pytest tests/test_config.py    # Run specific file
+uv run pytest -k "test_load_config"   # Run specific test
+uv run pytest -v                      # Verbose output
+uv run pytest --cov=src               # With coverage
 ```
 
 ### Test Fixtures
@@ -205,30 +207,43 @@ Common fixtures:
 
 ### Dependency Categories
 
-1. **Core Dependencies** - Required for runtime
-2. **Development Dependencies** - Only for development/testing
-3. **Optional Dependencies** - Not required but useful
+1. **Core Dependencies** - Required for runtime (fastmcp, pyzotero, openai, chromadb, httpx, etc.)
+2. **Development Dependencies** - Only for development/testing (pytest, ruff, ty, basedpyright, pip-audit)
 
 ### Adding Dependencies
 
 1. Add to `dependencies` or `[dependency-groups.dev]` in `pyproject.toml`
-2. Document why it's needed
-3. Run `uv sync`
-4. Update `docs/DEPENDENCY_MANAGEMENT.md`
+2. Run `uv sync`
+3. Update `docs/DEPENDENCY_MANAGEMENT.md`
 
 ### Auditing Dependencies
 
 ```bash
-# Check for vulnerabilities
-pip-audit
-
-# Run comprehensive audit
-python scripts/audit_dependencies.py
+pip-audit                                # Check for vulnerabilities
+python scripts/audit_dependencies.py     # Run comprehensive audit
 ```
 
 See `docs/DEPENDENCY_MANAGEMENT.md` for complete guide.
 
-## Recent Optimizations (TASK#4-#9)
+## GitHub Actions Workflows
+
+Four workflows in `.github/workflows/`:
+
+| Workflow | File | Schedule | Purpose |
+|----------|------|----------|---------|
+| CI/CD | `ci.yml` | Push/PR to main/develop | Lint, type check, test, security audit, build |
+| Gmail Ingestion | `gmail-ingestion.yml` | Daily 00:00 Beijing | Process Gmail alerts |
+| RSS Ingestion | `rss-ingestion.yml` | Daily 02:00 Beijing | Fetch RSS feeds |
+| Global Analysis | `global-analysis.yml` | Daily 03:00 Beijing | Batch analyze papers |
+
+All workflows use `astral-sh/setup-uv@v4` for fast dependency installation with built-in caching, support manual trigger via `workflow_dispatch`, and include dry-run mode. Logs are archived as artifacts with 3-day retention.
+
+## Completed Optimizations (TASK#1-#11)
+
+### TASK#1-#3: Core Workflow Implementation
+- Three-phase research paper management (Ingestion, Analysis, Global Scan)
+- RSS feed integration with AI filtering
+- Gmail integration for paper collection
 
 ### TASK#4: AI Analysis Templates
 - Moved hardcoded templates to `utils/templates.py`
@@ -251,21 +266,30 @@ See `docs/DEPENDENCY_MANAGEMENT.md` for complete guide.
 - Configuration caching (5-min TTL)
 - Environment mode support (dev/test/prod)
 - Comprehensive `.env.example` documentation
-- Performance optimization
 
 ### TASK#8: Logging System
 - Unified logging configuration module
 - Task-level logging with structured output
 - Performance monitoring
-- GitHub Actions integration with log artifacts
-- 3-day log retention
+- GitHub Actions integration with log artifacts (3-day retention)
 
 ### TASK#9: Dependency Management
-- Removed unused dependencies (lxml, tenacity, basedpyright)
+- Removed unused dependencies (lxml, tenacity)
 - Added missing dependency (httpx)
 - Organized dependencies by category
 - Created dependency audit script
-- Comprehensive management guide
+
+### TASK#10: Code Formatting and Documentation
+- Ruff formatting and linting across entire codebase
+- Updated README.md and CLAUDE.md
+- Cleaned up unnecessary comments and intermediate files
+
+### TASK#11: GitHub Actions Optimization
+- Optimized workflow trigger conditions
+- Added concurrency control to prevent duplicate runs
+- Log archiving with 3-day retention
+- GitHub Step Summary for run overview
+- Uses `astral-sh/setup-uv@v4` for dependency installation
 
 ## Performance Considerations
 
@@ -324,7 +348,12 @@ LOG_LEVEL=DEBUG
 ## Additional Documentation
 
 - `README.md` - User-facing documentation
+- `AGENTS.md` - Agent-specific development instructions
+- `CHANGELOG.md` - Version history
+- `CONTRIBUTING.md` - Contribution guidelines
 - `docs/DEPENDENCY_MANAGEMENT.md` - Dependency management guide
-- `docs/STRUCTURED-OUTPUT-EXAMPLES.md` - Output format examples
+- `docs/GITHUB_ACTIONS_GUIDE.md` - GitHub Actions guide
+- `docs/GITHUB-ACTIONS-SETUP.md` - Actions setup guide
+- `docs/GMAIL-SETUP.md` - Gmail API setup guide
 - `.env.example` - Configuration template with detailed comments
 - `TaskFile.txt` - Task list and project roadmap
