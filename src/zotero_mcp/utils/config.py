@@ -295,3 +295,25 @@ def get_gmail_config() -> dict[str, Any]:
         ).lower()
         in {"true", "yes", "1"},
     }
+
+
+def get_rss_config() -> dict[str, Any]:
+    """
+    Get RSS configuration for feed processing.
+
+    Returns:
+        Dictionary with RSS settings including OPML path, collection, and days back.
+    """
+    config = load_config()
+    env = config.get("env", {})
+
+    return {
+        "opml_path": env.get(
+            "RSS_OPML_PATH", os.getenv("RSS_OPML_PATH", "RSS/RSS_official.opml")
+        ),
+        "collection": env.get(
+            "RSS_COLLECTION", os.getenv("RSS_COLLECTION", "00_INBOXS")
+        ),
+        "days_back": int(env.get("RSS_DAYS_BACK", os.getenv("RSS_DAYS_BACK", "15"))),
+        "prompt": env.get("RSS_PROMPT", os.getenv("RSS_PROMPT", "")),
+    }
