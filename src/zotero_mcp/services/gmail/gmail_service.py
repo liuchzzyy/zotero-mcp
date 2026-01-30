@@ -454,12 +454,12 @@ class GmailService:
         """
         Full Gmail processing workflow.
 
-        1. Search and fetch emails
+        1. Search all emails from specified sender in inbox
         2. Extract items from HTML tables
-        3. Mark emails as read
-        4. Apply AI keyword filtering (uses RSS_PROMPT)
-        5. Import to Zotero
-        6. Trash/delete processed emails
+        3. Mark all matched emails as read
+        4. AI keyword filtering (uses RSS_PROMPT)
+        5. Trash/delete all matched emails
+        6. Import filtered items to Zotero
 
         Args:
             sender: Filter emails by sender

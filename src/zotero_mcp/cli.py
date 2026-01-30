@@ -511,10 +511,10 @@ def main():
                     args.collection = config_collection
 
             if not args.sender and not args.subject and not args.query:
-                args.query = "is:unread"
+                args.query = "in:inbox is:unread"
                 print(
                     "Warning: No --sender, --subject, or --query specified. "
-                    'Defaulting to --query "is:unread"'
+                    'Defaulting to --query "in:inbox is:unread"'
                 )
 
             service = GmailService()
