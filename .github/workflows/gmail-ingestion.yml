@@ -79,7 +79,7 @@ jobs:
 
       - name: Verify installation
         run: |
-          uv run zotero-mcp --version
+          uv run zotero-mcp version
 
       - name: Run Gmail ingestion
         id: gmail

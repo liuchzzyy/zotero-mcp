@@ -67,7 +67,7 @@ jobs:
 
       - name: Verify installation
         run: |
-          uv run zotero-mcp --version
+          uv run zotero-mcp version
           uv run zotero-mcp setup-info
 
       - name: Run global scan
