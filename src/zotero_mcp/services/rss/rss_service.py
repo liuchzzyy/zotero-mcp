@@ -21,6 +21,73 @@ logger = logging.getLogger(__name__)
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 MAX_RETRIES = 5
 
+# Zotero limits
+MAX_CREATOR_NAME_LENGTH = 210  # Zotero sync limit for single creator name
+MAX_CREATORS = 10  # Maximum number of creators to include
+
+
+def _parse_creator_string(author_string: str) -> list[dict[str, str]]:
+    """
+    Parse author string and split into individual creators.
+
+    Handles comma-separated author lists and truncates if necessary
+    to avoid Zotero HTTP 413 errors.
+
+    Args:
+        author_string: Raw author string from RSS feed
+
+    Returns:
+        List of creator dicts with 'creatorType' and 'name' keys
+    """
+    if not author_string:
+        return []
+
+    creators = []
+
+    # Try to split by common separators (comma, semicolon, newline)
+    # Handle both "Author1, Author2, Author3" and "Author1; Author2; Author3"
+    parts = []
+    for sep in [", ", "; ", "\n", ","]:
+        if sep in author_string:
+            parts = [p.strip() for p in author_string.split(sep) if p.strip()]
+            break
+
+    # If no separator found, treat as single author
+    if not parts:
+        parts = [author_string.strip()]
+
+    # Limit number of creators
+    if len(parts) > MAX_CREATORS:
+        logger.warning(
+            f"  ! Author list too long ({len(parts)} authors), "
+            f"truncating to {MAX_CREATORS} + et al."
+        )
+        parts = parts[:MAX_CREATORS]
+
+    # Create creator dicts, ensuring each name is within length limit
+    for author in parts:
+        author = author.strip()
+        if len(author) > MAX_CREATOR_NAME_LENGTH:
+            author = author[: MAX_CREATOR_NAME_LENGTH - 4] + "..."
+            logger.warning(f"  ! Author name too long, truncated to: {author}")
+
+        if author:  # Only add non-empty names
+            creators.append({"creatorType": "author", "name": author})
+
+    # Add "et al." if we truncated the list
+    if len(creators) == MAX_CREATORS:
+        # Check if original had more authors
+        original_count = len(
+            [p.strip() for p in author_string.split(",") if p.strip()]
+            if "," in author_string or ";" in author_string
+            else [author_string.strip()]
+        )
+        if original_count > MAX_CREATORS:
+            # Add et al. as last creator
+            creators[-1]["name"] = creators[-1]["name"] + " et al."
+
+    return creators
+
 
 class RSSService:
     """Service for fetching and parsing RSS feeds."""
@@ -294,12 +361,7 @@ class RSSService:
             }
 
             if rss_item.author:
-                item_data["creators"] = [
-                    {
-                        "creatorType": "author",
-                        "name": rss_item.author,
-                    }
-                ]
+                item_data["creators"] = _parse_creator_string(rss_item.author)
 
             result = await self._zotero_api_call_with_retry(
                 lambda: data_service.create_items([item_data]),
