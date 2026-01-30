@@ -239,9 +239,7 @@ class RSSService:
             doi = rss_item.doi
             if not doi:
                 logger.info(f"  ? Looking up DOI for: {cleaned_title[:50]}")
-                doi = await asyncio.to_thread(
-                    metadata_service.lookup_doi, cleaned_title, rss_item.author
-                )
+                doi = await metadata_service.lookup_doi(cleaned_title, rss_item.author)
                 if doi:
                     logger.info(f"  + Found DOI: {doi}")
 
