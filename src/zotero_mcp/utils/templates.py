@@ -211,7 +211,7 @@ THEME_PRESETS = {
         "blockquote_background": "#fff9f9",
         "max_width": "860px",
         "paragraph_margin": "0.2em",
-        "list_margin": "0.5em",
+        "list_margin": "0.2em",
         "list_item_margin": "0.2em",
         "h1_margin": "0.8em",
         "h2_margin": "0.8em",
