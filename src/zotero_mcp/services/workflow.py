@@ -30,7 +30,6 @@ from zotero_mcp.utils.logging_config import (
 )
 from zotero_mcp.utils.markdown_html import markdown_to_html
 from zotero_mcp.utils.templates import get_analysis_questions
-from zotero_mcp.utils.templates import get_analysis_template
 from zotero_mcp.utils.templates import DEFAULT_ANALYSIS_TEMPLATE_JSON
 
 logger = get_logger(__name__)

@@ -5,7 +5,7 @@ Defines Pydantic models for parsing and rendering structured AI-generated notes.
 This allows complete control over note formatting independent of LLM output.
 """
 
-from typing import Any, Literal
+from typing import Literal
 from pydantic import BaseModel, Field
 
 
