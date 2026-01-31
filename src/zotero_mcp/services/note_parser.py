@@ -20,7 +20,6 @@ from zotero_mcp.models.note_structure import (
     NumberedListBlock,
     ParagraphBlock,
     QuoteBlock,
-    StructuredAnalysisResponse,
     TableBlock,
 )
 from zotero_mcp.utils.logging_config import get_logger
@@ -31,7 +30,7 @@ logger = get_logger(__name__)
 class StructuredNoteParser:
     """Parse LLM output into structured note blocks."""
 
-    def parse(self, content: str) -> list[ContentBlock]:
+    def parse(self, content: str) -> list[AnyBlock]:
         """
         Parse LLM output into structured blocks.
 
@@ -39,7 +38,7 @@ class StructuredNoteParser:
             content: Raw LLM output (JSON or Markdown)
 
         Returns:
-            List of ContentBlock objects
+            List of AnyBlock objects (union of all block types)
 
         Raises:
             ValueError: If content cannot be parsed
@@ -80,7 +79,7 @@ class StructuredNoteParser:
             logger.debug(f"JSON parsing failed: {e}, falling back to Markdown")
             return self._parse_markdown(content)
 
-    def _parse_json(self, content: str) -> list[ContentBlock]:
+    def _parse_json(self, content: str) -> list[AnyBlock]:
         """Parse structured JSON format."""
         # Try to extract JSON from markdown code blocks first
         code_block_match = re.search(r"```(?:json)?\s*\n([\s\S]*?)\n```", content)
@@ -194,7 +193,7 @@ class StructuredNoteParser:
             logger.warning(f"Unknown block type: {block_type}")
             return None
 
-    def _parse_markdown(self, content: str) -> list[ContentBlock]:
+    def _parse_markdown(self, content: str) -> list[AnyBlock]:
         """
         Parse Markdown format as fallback.
 

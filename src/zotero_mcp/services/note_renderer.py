@@ -5,7 +5,6 @@ Converts ContentBlock objects into formatted HTML with controlled styling.
 """
 
 import re
-from typing import Any
 
 from zotero_mcp.models.note_structure import (
     AnyBlock,
@@ -278,7 +277,6 @@ class StructuredNoteRenderer:
 
     def _format_list_item(self, item) -> str:
         """Format list item text, preserving bold markers and adding citations."""
-        from zotero_mcp.models.note_structure import ListItemWithCitation
 
         # Handle both string and ListItemWithCitation
         if isinstance(item, str):
