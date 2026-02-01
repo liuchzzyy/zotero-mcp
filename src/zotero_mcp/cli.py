@@ -354,8 +354,8 @@ def main():
     )
     dedup_parser.add_argument(
         "--trash-collection",
-        default="06 - TRASHES",
-        help="Name of collection to move duplicates to (default: '06 - TRASHES')",
+        default="06_TRASHES",
+        help="Name of collection to move duplicates to (default: '06_TRASHES')",
     )
 
     # Version command
