@@ -437,7 +437,10 @@ class WorkflowService:
                 return error_result
 
             # 3. Call LLM
-            template = DEFAULT_ANALYSIS_TEMPLATE_JSON if use_structured and template is None else template
+            if use_structured and template is None:
+                template = DEFAULT_ANALYSIS_TEMPLATE_JSON
+            elif template is None:
+                template = ""
             analysis_content = await self._call_llm_analysis(
                 item=item,
                 llm_client=llm_client,
