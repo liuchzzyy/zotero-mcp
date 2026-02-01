@@ -13,6 +13,7 @@ on:
         default: '500'
         type: choice
         options:
+          - '10'
           - '100'
           - '200'
           - '500'
@@ -22,6 +23,7 @@ on:
         default: '100'
         type: choice
         options:
+          - '1'
           - '50'
           - '100'
           - '200'
