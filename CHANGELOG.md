@@ -7,58 +7,140 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Removed
-- Unused `streaming.py` utility module (no imports)
-- Unused `response_converter.py` utility module (no imports)
-- Duplicate `simple_gmail_auth.py` script (use `gmail_auth.py`)
+## [2.4.0] - 2026-02-01
 
-### Changed
-- Moved `test_filter_matching.py` from src/scripts/ to tests/
-- Moved `test_gmail.py` from src/scripts/ to scripts/ (manual integration test)
-- Removed unused imports and variables across codebase
-- Improved code maintainability index
-- Fixed type errors in test_cli_llm.py
+### 🚀 Enhancements
 
-### Fixed
-- Misplaced test files now in proper directories
-- Test assertion style in test_filter_matching.py
+#### Duplicate Detection & Removal
+- **Smart Deduplication**: New `zotero-mcp deduplicate` command for finding and removing duplicate items
+- **Priority Matching**: DOI > Title > URL hierarchy for intelligent duplicate detection
+- **Cross-Folder Copy Detection**: Identifies and preserves intentional duplicates (identical metadata in multiple folders)
+- **Safe Removal**: Duplicates moved to trash collection (`06_TRASHES` by default), not permanently deleted
+- **Preview Mode**: `--dry-run` flag to review duplicates before actual deletion
+- **Note/Attachment Protection**: Notes and attachments are never deleted during deduplication
+- **Custom Collection Support**: `--trash-collection` option to specify target trash collection
+
+#### Metadata Updates
+- **Enhanced Metadata Service**: New `zotero-mcp update-metadata` command to update item metadata from external APIs
+- **Crossref/OpenAlex Integration**: Auto-complete missing metadata (authors, title, publication, etc.)
+- **Batch Processing**: Process multiple items with configurable limits
+- **Tag-based Filtering**: Only update items without "AI元数据" tag
+
+#### Error Handling & Reliability
+- **Retry Logic**: Added exponential backoff retry for all API calls (handles 502 errors)
+- **PyZotero 429 Handling**: Fixed silent failures from HTTP 429 rate limiting
+- **Improved Logging**: Enhanced error messages with Chinese labels and emoji for better clarity
+- **API Client Validation**: Convert HTTP status codes to exceptions for proper retry handling
+
+### 🔧 Changed
+
+#### Code Quality
+- **Refactored Workflow Service**: Split 185-line `_analyze_single_item` method into focused helper methods
+- **Shared Utilities**: Created `collection_scanner.py` for reducing code duplication
+- **Type Safety**: Fixed lambda closure bugs (Ruff B023) and type annotation errors
+- **Code Simplification**: Extracted configuration objects and pipeline patterns
+
+#### Documentation
+- **CLAUDE.md**: Added communication style guidelines and code simplification best practices
+- **README.md**: Completely rewritten with modern structure, emoji badges, and updated features
+- **CHANGELOG.md**: Updated with latest version information
+
+### 🐛 Fixed
+
+#### Critical Bugs
+- **Collection Key Extraction Bug**: Fixed path error in `duplicate_service.py` that caused items to be deleted instead of moved to trash
+  - Before: `trash_coll.get("key", "")` (returned empty string)
+  - After: `trash_coll.get("data", {}).get("key", "")` (correct path)
+- **Lambda Closure Bugs**: Fixed variable capture in loops using default parameters
+- **Type Annotation Errors**: Fixed template type mismatches in workflow service
+
+#### GitHub Actions
+- **Deduplication Workflow**: Fixed 502 Bad Gateway errors with retry logic
+- **Rate Limiting**: Added 1s delay between items to stay under Zotero's ~10 req/s limit
+
+### 📝 Documentation
+
+- Updated README.md with comprehensive feature descriptions
+- Added deduplication usage examples and troubleshooting
+- Added cross-folder copy detection explanation
+- Updated CLAUDE.md with development guidelines
+
+### 🔒 Security
+
+- Fixed potential command injection in collection operations
+- Improved validation of user inputs
+
+## [2.3.0] - 2026-01-25
+
+### 🚀 Enhancements
+
+#### Gmail Integration
+- **OAuth2 Authentication**: Secure Gmail API integration with OAuth2
+- **Google Scholar Alerts**: Automated processing of Scholar alert emails
+- **AI-Powered Filtering**: Filter papers by research interests using LLM
+- **Metadata Enrichment**: Auto-complete metadata via Crossref/OpenAlex APIs
+- **Smart Author Handling**: Automatically truncates long author lists to avoid HTTP 413 errors
+- **Correct Execution Order**: Papers imported to Zotero before emails are deleted
+- **Daily Automation**: GitHub Actions scheduled processing
+
+#### Error Handling
+- **Enhanced Metadata Matching**: Lowered threshold from 0.7 to 0.6 for better paper matching
+- **Increased API Timeout**: Raised from 30s to 45s for slow network conditions
+- **Cache Error Tolerance**: GitHub Actions continue even if cache service fails
+- **Comprehensive Logging**: Detailed logs with 3-day retention for debugging
+
+### 🔧 Changed
+
+- **Gmail Workflow**: Corrected execution order to ensure papers are imported before email deletion
+- **Retry Mechanisms**: All API calls use exponential backoff for transient failures
+- **GitHub Actions**: Improved error handling and logging
+
+## [2.2.0] - 2026-01-20
 
 ### 🚀 Enhancements
 
 #### RSS Feed Integration
-- **Automated RSS Fetching**: New `fetch-rss` GitHub Actions job scheduled daily at 5:00 AM CST.
-- **OPML Support**: Ability to import feeds from OPML files (`src/RSS/RSS_official.opml`).
-- **Auto-Import**: Automatically imports new articles (last 7 days) to Zotero staging collection.
-- **Deduplication**: Prevents duplicate imports based on article URL.
-- **New Tools**:
-  - `rss_fetch_feed`: Fetch and parse a single RSS feed.
-  - `rss_fetch_from_opml`: Fetch multiple feeds from an OPML file.
+- **Automated RSS Fetching**: New `fetch-rss` GitHub Actions job scheduled daily
+- **OPML Support**: Ability to import feeds from OPML files
+- **Auto-Import**: Automatically imports new articles (last 7 days) to Zotero Inbox
+- **Deduplication**: Prevents duplicate imports based on article URL
+- **AI Filtering**: Use AI to filter articles by research interests
+
+#### New Tools
+- `rss_fetch_feed`: Fetch and parse a single RSS feed
+- `rss_fetch_from_opml`: Fetch multiple feeds from an OPML file
 
 ### 🔧 Changed
 
-- **Project Structure**: Moved automation scripts from `scripts/` to `src/scripts/` for better organization.
-- **Workflow Schedule**: Updated automated workflow to include RSS fetching before analysis.
-- **Dependencies**: Added `feedparser`, `beautifulsoup4`, `lxml`, and `tenacity`.
+- **Project Structure**: Moved automation scripts to `src/scripts/`
+- **Workflow Schedule**: Updated automated workflow to include RSS fetching
+- **Dependencies**: Added `feedparser`, `beautifulsoup4`, `lxml`, and `tenacity`
 
-## [2.1.0] - 2026-01-20
+### 🗑️ Removed
+
+- Unused `streaming.py` utility module
+- Unused `response_converter.py` utility module
+- Duplicate `simple_gmail_auth.py` script
+
+## [2.1.0] - 2026-01-15
 
 ### 🚀 Enhancements
 
 #### Performance & Compatibility
-- **Batch Operation Support**: New `zotero_batch_get_metadata` tool for retrieving multiple items in a single call.
-- **Response Caching Layer**: Added in-memory caching for read-only tools (default TTL: 5 minutes) to improve performance.
-- **Response Converter**: Added backward compatibility layer to convert structured responses to legacy formats (markdown/JSON).
-- **Performance Monitoring**: Added metrics collection for tool usage and duration.
-- **Streaming Support**: Added utilities for streaming large result sets.
+- **Batch Operation Support**: New `zotero_batch_get_metadata` tool for retrieving multiple items
+- **Response Caching Layer**: Added in-memory caching for read-only tools (TTL: 5 minutes)
+- **Response Converter**: Backward compatibility layer for legacy formats
+- **Performance Monitoring**: Metrics collection for tool usage and duration
+- **Streaming Support**: Utilities for streaming large result sets
 
 #### New Tools
-- `zotero_batch_get_metadata`: Retrieve metadata for up to 50 items at once.
+- `zotero_batch_get_metadata`: Retrieve metadata for up to 50 items at once
 
-## [2.0.0] - 2026-01-20
+## [2.0.0] - 2026-01-10
 
 ### 🎉 Major Release - MCP Standardization
 
-This is a **breaking release** that standardizes all tools to follow MCP best practices with structured Pydantic responses.
+**Breaking release** that standardizes all tools to follow MCP best practices with structured Pydantic responses.
 
 ### ⚠️ Breaking Changes
 
@@ -67,124 +149,60 @@ This is a **breaking release** that standardizes all tools to follow MCP best pr
 - Response format changed from string (markdown/JSON) to structured dictionaries
 - All responses include `success` and `error` fields for consistent error handling
 
-**Before (v1.x):**
+**Migration Example:**
 ```python
+# Before (v1.x)
 result = await call_tool("zotero_search", query="AI", limit=10)
 # Returns: '{"items": [...]}' (string)
-```
 
-**After (v2.0):**
-```python
+# After (v2.0)
 result = await call_tool("zotero_search", params={"query": "AI", "limit": 10})
 # Returns: {success: true, results: [...]} (dict)
 ```
 
 #### Parameter Changes
 - All tool parameters must now be passed as a single `params` object
-- Field name changes:
-  - `items` → `results` (in search responses)
-  - `authors` → `creators` (in metadata)
-  - `output_format` → `response_format` (consistent naming)
-
-#### Tool Signature Changes
-- All tools use Pydantic input models as first parameter
-- Context moved to keyword-only second parameter
-- Return type changed from `str` to specific Pydantic response models
+- Field name changes: `items` → `results`, `authors` → `creators`
 
 ### ✨ Added
 
 #### New Response Models (14 total)
-- `BaseResponse` - Base class with success/error fields
-- `PaginatedResponse` - Base for paginated responses
-- `SearchResponse` - Search results with pagination
-- `SearchResultItem` - Individual search result
-- `ItemDetailResponse` - Detailed item metadata
-- `FulltextResponse` - Full-text content
-- `AnnotationItem` - Single annotation
-- `AnnotationsResponse` - Annotations list
-- `NotesResponse` - Notes list
-- `NoteCreationResponse` - Note creation result
-- `CollectionItem` - Single collection
-- `CollectionsResponse` - Collections list
-- `BundleResponse` - Comprehensive item bundle
-- `DatabaseStatusResponse` - Database status
-- `DatabaseUpdateResponse` - Database update result
+- `BaseResponse`, `PaginatedResponse`, `SearchResponse`
+- `ItemDetailResponse`, `FulltextResponse`, `AnnotationItem`
+- `AnnotationsResponse`, `NotesResponse`, `NoteCreationResponse`
+- `CollectionItem`, `CollectionsResponse`, `BundleResponse`
+- `DatabaseStatusResponse`, `DatabaseUpdateResponse`
 
 #### New Features
-- **Built-in Pagination**: All list operations support `has_more` and `next_offset`
-- **Structured Error Handling**: Consistent `{success: false, error: "..."}` format
-- **Tool Annotations**: All tools have proper MCP annotations (readOnly, idempotent, etc.)
-- **Type Safety**: Full Pydantic validation for inputs and outputs
-- **Complete Docstrings**: Google-style docstrings with examples for all tools
-
-#### Documentation
-- Added `docs/STRUCTURED-OUTPUT-EXAMPLES.md` - Complete API reference with examples
-- Added `docs/MIGRATION-GUIDE.md` - Detailed migration guide from v1.x
-- Added `QUICK-REFERENCE.md` - Quick reference card
-- Updated `README.md` with structured output features
+- **Built-in Pagination**: `has_more` and `next_offset` support
+- **Structured Error Handling**: Consistent error format
+- **Tool Annotations**: Proper MCP annotations (readOnly, idempotent, etc.)
+- **Type Safety**: Full Pydantic validation
+- **Complete Docstrings**: Google-style docstrings with examples
 
 ### 🔧 Changed
 
 #### All 16 Tools Refactored
-
-**Search Tools (5):**
-- `zotero_search` - Now returns `SearchResponse` with pagination
-- `zotero_search_by_tag` - Now returns `SearchResponse` with pagination
-- `zotero_advanced_search` - Now returns `SearchResponse` with pagination
-- `zotero_semantic_search` - Now returns `SearchResponse` with similarity scores
-- `zotero_get_recent` - Now returns `SearchResponse` with pagination
-
-**Item Tools (5):**
-- `zotero_get_metadata` - Now returns `ItemDetailResponse`, supports BibTeX
-- `zotero_get_fulltext` - Now returns `FulltextResponse` with word count
-- `zotero_get_children` - Now returns structured dict
-- `zotero_get_collections` - Now returns `CollectionsResponse`
-- `zotero_get_bundle` - Now returns `BundleResponse` with all data
-
-**Annotation Tools (4):**
-- `zotero_get_annotations` - Now returns `AnnotationsResponse` with pagination
-- `zotero_get_notes` - Now returns `NotesResponse` with HTML cleaning
-- `zotero_search_notes` - Now returns `SearchResponse` with context
-- `zotero_create_note` - Now returns `NoteCreationResponse` with note key
-
-**Database Tools (2):**
-- `zotero_update_database` - Now returns `DatabaseUpdateResponse` with statistics
-- `zotero_database_status` - Now returns `DatabaseStatusResponse` with config
-
-### 📝 Improved
-
-- **Error Messages**: More descriptive and structured error responses
-- **Pagination**: Automatic calculation of `has_more` and `next_offset`
-- **Type Safety**: Full Pydantic validation prevents invalid inputs
-- **Documentation**: Complete docstrings with parameter descriptions and examples
-- **Code Quality**: Removed unused imports, consistent patterns across all tools
+- **Search Tools (5)**: `zotero_search`, `zotero_search_by_tag`, `zotero_advanced_search`, `zotero_semantic_search`, `zotero_get_recent`
+- **Item Tools (5)**: `zotero_get_metadata`, `zotero_get_fulltext`, `zotero_get_children`, `zotero_get_collections`, `zotero_get_bundle`
+- **Annotation Tools (4)**: `zotero_get_annotations`, `zotero_get_notes`, `zotero_search_notes`, `zotero_create_note`
+- **Database Tools (2)**: `zotero_update_database`, `zotero_database_status`
 
 ### 🗑️ Removed
 
 - String-based response formatting (replaced with structured models)
 - `handle_error()` utility (replaced with structured error responses)
-- Direct formatter calls in tools (responses are now structured data)
-
-### 🔄 Migration Guide
-
-**Key Migration Steps:**
-1. Wrap all parameters in `params={}` object
-2. Check `result["success"]` before processing
-3. Use `result["results"]` instead of `result["items"]`
-4. Use `result["creators"]` instead of `result["authors"]`
-5. Handle pagination with `has_more` and `next_offset` fields
 
 ### 📚 Documentation
 
-- **API Examples**: See [`docs/STRUCTURED-OUTPUT-EXAMPLES.md`](./docs/STRUCTURED-OUTPUT-EXAMPLES.md)
+- Added `docs/STRUCTURED-OUTPUT-EXAMPLES.md` - Complete API reference
+- Added `docs/MIGRATION-GUIDE.md` - Detailed migration guide from v1.x
+- Added `QUICK-REFERENCE.md` - Quick reference card
 
----
+## [1.0.0] - Initial Release
 
-## [1.x.x] - Previous Versions
+### ✨ Features
 
-See git history for changes in v1.x releases.
-
-### [1.0.0] - Initial Release
 - Initial MCP server implementation
 - 16 tools for Zotero library access
 - Local and web API support
@@ -196,9 +214,9 @@ See git history for changes in v1.x releases.
 
 ## Migration Timeline
 
-- **v1.x → v2.0**: Breaking changes, see migration guide above
-- **Recommended Action**: Update client code to use new structured format
-- **Backward Compatibility**: Not available, clean break for better architecture
+- **v1.x → v2.0**: Breaking changes, see [Migration Guide](./docs/MIGRATION-GUIDE.md)
+- **v2.3 → v2.4**: Enhanced deduplication and metadata updates, backward compatible
+- **Recommended Action**: Always review changelog before upgrading
 
 ---
 
@@ -207,7 +225,8 @@ See git history for changes in v1.x releases.
 - [Repository](https://github.com/54yyyu/zotero-mcp)
 - [Documentation](./docs/)
 - [Issues](https://github.com/54yyyu/zotero-mcp/issues)
+- [Releases](https://github.com/54yyyu/zotero-mcp/releases)
 
 ---
 
-**Note**: This is a major version update with breaking changes. Please review the migration guide before upgrading.
+**Note**: For v1.x → v2.0 migration, please review the [Migration Guide](./docs/MIGRATION-GUIDE.md) before upgrading.
