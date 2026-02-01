@@ -160,14 +160,16 @@ class MetadataUpdateService:
     async def update_all_items(
         self,
         collection_key: str | None = None,
-        limit: int | None = None,
+        scan_limit: int = 100,
+        treated_limit: int | None = None,
     ) -> dict[str, Any]:
         """
-        Update metadata for multiple items.
+        Update metadata for multiple items with batch scanning.
 
         Args:
             collection_key: Optional collection key to limit updates
-            limit: Maximum number of items to process
+            scan_limit: Number of items to fetch per batch from API
+            treated_limit: Maximum total number of items to process
 
         Returns:
             Dict with statistics:
@@ -178,12 +180,14 @@ class MetadataUpdateService:
         """
         logger.info("Starting metadata update for multiple items...")
 
-        # Get items to update
+        # Get items to update with batch scanning
         if collection_key:
-            items = await self.item_service.get_collection_items(collection_key)
+            items = await self._get_collection_items_batch(
+                collection_key, scan_limit, treated_limit
+            )
         else:
             # Get all items (need to implement or use existing method)
-            items = await self._get_all_items(limit)
+            items = await self._get_all_items(scan_limit, treated_limit)
 
         total = len(items)
         updated = 0
@@ -395,9 +399,70 @@ class MetadataUpdateService:
 
         return updated
 
-    async def _get_all_items(self, limit: int | None = None) -> list[dict[str, Any]]:
-        """Get all items from the library."""
-        # This is a placeholder - need to implement proper pagination
-        # For now, return empty list
-        logger.warning("_get_all_items not fully implemented yet")
+    async def _get_all_items(
+        self, scan_limit: int = 100, treated_limit: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Get all items from the library with batch scanning."""
+        logger.warning(
+            f"_get_all_items: Fetching items (batch: {scan_limit}, max: {treated_limit or 'all'})"
+        )
+        # TODO: Implement proper batch scanning from API
+        # For now, return empty list - user should specify collection_key
+        logger.warning(
+            "_get_all_items: Not fully implemented. Please specify a collection_key for better results."
+        )
         return []
+
+    async def _get_collection_items_batch(
+        self,
+        collection_key: str,
+        scan_limit: int = 100,
+        treated_limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get items from a collection with batch scanning."""
+        all_items = []
+        offset = 0
+        seen_keys = set()
+
+        while True:
+            # Check if we've reached the treated_limit
+            if treated_limit and len(all_items) >= treated_limit:
+                break
+
+            # Fetch batch from API
+            items = await self.item_service.get_collection_items(
+                collection_key, limit=scan_limit, start=offset
+            )
+
+            if not items:
+                break  # No more items
+
+            # Filter duplicates and convert to dict
+            for item in items:
+                if item.key not in seen_keys:
+                    seen_keys.add(item.key)
+                    all_items.append(
+                        {
+                            "key": item.key,
+                            "data": {
+                                "title": item.title,
+                                "DOI": item.doi,
+                                "url": item.url,
+                            },
+                        }
+                    )
+
+                    # Check if we've reached the treated_limit
+                    if treated_limit and len(all_items) >= treated_limit:
+                        break
+
+            # If we got fewer items than scan_limit, we've exhausted the collection
+            if len(items) < scan_limit:
+                break
+
+            offset += scan_limit
+
+        logger.info(
+            f"Retrieved {len(all_items)} items from collection in batches of {scan_limit}"
+        )
+        return all_items

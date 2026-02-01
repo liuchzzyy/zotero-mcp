@@ -132,7 +132,17 @@ def main():
     update_db_parser.add_argument(
         "--force-rebuild", action="store_true", help="Force complete rebuild"
     )
-    update_db_parser.add_argument("--limit", type=int, help="Limit items to process")
+    update_db_parser.add_argument(
+        "--scan-limit",
+        type=int,
+        default=100,
+        help="Number of items to fetch per batch from API (default: 100)",
+    )
+    update_db_parser.add_argument(
+        "--treated-limit",
+        type=int,
+        help="Maximum total number of items to process",
+    )
     update_db_parser.add_argument(
         "--fulltext", action="store_true", help="Extract fulltext content"
     )
@@ -262,7 +272,16 @@ def main():
         "scan", help="Scan library and analyze items without AI notes"
     )
     scan_parser.add_argument(
-        "--limit", type=int, default=20, help="Maximum items to process (default: 20)"
+        "--scan-limit",
+        type=int,
+        default=100,
+        help="Number of items to fetch per batch from API (default: 100)",
+    )
+    scan_parser.add_argument(
+        "--treated-limit",
+        type=int,
+        default=20,
+        help="Maximum total items to process (default: 20)",
     )
     scan_parser.add_argument(
         "--target-collection",
@@ -293,9 +312,15 @@ def main():
         help="Limit to specific collection (by key)",
     )
     update_metadata_parser.add_argument(
-        "--limit",
+        "--scan-limit",
         type=int,
-        help="Maximum number of items to process",
+        default=100,
+        help="Number of items to fetch per batch from API (default: 100)",
+    )
+    update_metadata_parser.add_argument(
+        "--treated-limit",
+        type=int,
+        help="Maximum total number of items to process",
     )
     update_metadata_parser.add_argument(
         "--item-key",
@@ -311,10 +336,16 @@ def main():
         help="Limit to specific collection (by key)",
     )
     dedup_parser.add_argument(
-        "--limit",
+        "--scan-limit",
+        type=int,
+        default=500,
+        help="Number of items to fetch per batch from API (default: 500)",
+    )
+    dedup_parser.add_argument(
+        "--treated-limit",
         type=int,
         default=1000,
-        help="Maximum number of items to scan (default: 1000)",
+        help="Maximum total number of items to scan (default: 1000)",
     )
     dedup_parser.add_argument(
         "--dry-run",
@@ -412,7 +443,8 @@ def main():
 
             stats = search.update_database(
                 force_full_rebuild=args.force_rebuild,
-                limit=args.limit,
+                scan_limit=args.scan_limit,
+                treated_limit=args.treated_limit,
                 extract_fulltext=args.fulltext,
             )
 
@@ -626,7 +658,8 @@ def main():
         try:
             result = asyncio.run(
                 scanner.scan_and_process(
-                    limit=args.limit,
+                    scan_limit=args.scan_limit,
+                    treated_limit=args.treated_limit,
                     target_collection=args.target_collection,
                     dry_run=args.dry_run,
                     llm_provider=args.llm_provider,
@@ -680,7 +713,8 @@ def main():
                     # Update multiple items
                     result = await update_service.update_all_items(
                         collection_key=args.collection,
-                        limit=args.limit,
+                        scan_limit=args.scan_limit,
+                        treated_limit=args.treated_limit,
                     )
                     print(f"\n=== Metadata Update Results ===")
                     print(f"  Total processed: {result['total']}")
@@ -710,7 +744,8 @@ def main():
             try:
                 result = await dedup_service.find_and_remove_duplicates(
                     collection_key=args.collection,
-                    limit=args.limit,
+                    scan_limit=args.scan_limit,
+                    treated_limit=args.treated_limit,
                     dry_run=args.dry_run,
                 )
                 print(f"\n=== Deduplication Results ===")

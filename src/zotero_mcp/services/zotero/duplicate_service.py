@@ -49,7 +49,8 @@ class DuplicateDetectionService:
     async def find_and_remove_duplicates(
         self,
         collection_key: str | None = None,
-        limit: int = 1000,
+        scan_limit: int = 500,
+        treated_limit: int = 1000,
         dry_run: bool = False,
     ) -> dict[str, Any]:
         """
@@ -57,7 +58,8 @@ class DuplicateDetectionService:
 
         Args:
             collection_key: Optional collection key to limit scan
-            limit: Maximum number of items to scan (default: 1000)
+            scan_limit: Number of items to fetch per batch from API (default: 500)
+            treated_limit: Maximum total number of items to scan (default: 1000)
             dry_run: If True, don't actually delete items
 
         Returns:
@@ -69,8 +71,10 @@ class DuplicateDetectionService:
         """
         logger.info("Starting duplicate detection...")
 
-        # Get all items
-        items = await self._get_items_to_scan(collection_key, limit)
+        # Get all items with batch scanning
+        items = await self._get_items_to_scan(
+            collection_key, scan_limit, treated_limit
+        )
         logger.info(f"Scanning {len(items)} items for duplicates...")
 
         # Find duplicate groups
@@ -314,66 +318,118 @@ class DuplicateDetectionService:
         return removed_count
 
     async def _get_items_to_scan(
-        self, collection_key: str | None = None, limit: int = 1000
+        self,
+        collection_key: str | None = None,
+        scan_limit: int = 500,
+        treated_limit: int = 1000,
     ) -> list[dict[str, Any]]:
         """
-        Get items to scan for duplicates.
+        Get items to scan for duplicates with batch scanning.
 
         Args:
             collection_key: Optional collection key to limit scan
-            limit: Maximum number of items to retrieve
+            scan_limit: Number of items to fetch per batch from API
+            treated_limit: Maximum total number of items to retrieve
 
         Returns:
             List of item dicts
         """
-        if collection_key:
-            # Get items from specific collection
-            items = await self.item_service.get_collection_items(
-                collection_key, limit=limit
-            )
-            # Convert SearchResultItem to dict format expected by duplicate detection
-            return [
-                {
-                    "key": item.key,
-                    "data": {
-                        "DOI": item.doi,
-                        "title": item.title,
-                        "url": item.url,
-                        "creators": [],
-                        "abstractNote": item.abstractNote,
-                        "publicationTitle": item.publicationTitle,
-                        "date": item.date,
-                        "volume": item.volume,
-                        "issue": item.issue,
-                        "pages": item.pages,
-                        "tags": [{"tag": tag} for tag in (item.tags or [])],
-                    },
-                    "children": [],
-                }
-                for item in items
-            ]
-        else:
-            # Get all items from library
-            # This is a simplified version - should implement pagination
-            return await self._get_all_items(limit)
+        all_items = []
+        seen_keys = set()
 
-    async def _get_all_items(self, limit: int = 1000) -> list[dict[str, Any]]:
-        """Get all items from the library."""
-        # TODO: Implement proper pagination
-        # For now, use empty list - user should specify collection
-        logger.warning(
-            "_get_all_items: Getting all items not fully implemented. "
-            "Please specify a collection_key for better results."
-        )
-        try:
-            # Use API client to get top-level items
-            import asyncio
-            loop = asyncio.get_event_loop()
-            items = await loop.run_in_executor(
-                None,
-                lambda: self.item_service.api_client.client.top(limit=limit)
+        if collection_key:
+            # Get items from specific collection in batches
+            offset = 0
+            while len(all_items) < treated_limit:
+                # Fetch batch from API
+                items = await self.item_service.get_collection_items(
+                    collection_key, limit=scan_limit, start=offset
+                )
+
+                if not items:
+                    break  # No more items
+
+                # Convert and filter duplicates
+                for item in items:
+                    if item.key not in seen_keys:
+                        seen_keys.add(item.key)
+                        all_items.append(
+                            {
+                                "key": item.key,
+                                "data": {
+                                    "DOI": item.doi,
+                                    "title": item.title,
+                                    "url": item.url,
+                                    "creators": [],
+                                    "abstractNote": item.abstractNote,
+                                    "publicationTitle": item.publicationTitle,
+                                    "date": item.date,
+                                    "volume": item.volume,
+                                    "issue": item.issue,
+                                    "pages": item.pages,
+                                    "tags": [{"tag": tag} for tag in (item.tags or [])],
+                                },
+                                "children": [],
+                            }
+                        )
+
+                        if len(all_items) >= treated_limit:
+                            break
+
+                # If we got fewer items than scan_limit, we've exhausted the collection
+                if len(items) < scan_limit:
+                    break
+
+                offset += scan_limit
+
+            logger.info(
+                f"Retrieved {len(all_items)} items from collection in batches of {scan_limit}"
             )
-            return items if items else []
+        else:
+            # Get all items from library in batches
+            all_items = await self._get_all_items(scan_limit, treated_limit)
+
+        return all_items
+
+    async def _get_all_items(
+        self, scan_limit: int = 500, treated_limit: int = 1000
+    ) -> list[dict[str, Any]]:
+        """Get all items from the library with batch scanning."""
+        logger.info(
+            f"Fetching items from entire library (batch size: {scan_limit}, max: {treated_limit})"
+        )
+
+        all_items = []
+        start = 0
+
+        try:
+            import asyncio
+
+            loop = asyncio.get_event_loop()
+
+            while len(all_items) < treated_limit:
+                # Fetch batch from API
+                items = await loop.run_in_executor(
+                    None,
+                    lambda s=start, l=scan_limit: self.item_service.api_client.client.top(
+                        start=s, limit=l
+                    ),
+                )
+
+                if not items:
+                    break  # No more items
+
+                all_items.extend(items)
+
+                # If we got fewer items than scan_limit, we've exhausted the library
+                if len(items) < scan_limit:
+                    break
+
+                start += scan_limit
+
+            logger.info(f"Retrieved {len(all_items)} items from library")
+            return all_items
+
         except Exception as e:
             logger.error(f"Error getting all items: {e}")
             return []

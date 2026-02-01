@@ -11,8 +11,17 @@ on:
         description: 'Limit to specific collection key (optional)'
         required: false
         type: string
-      limit:
-        description: 'Maximum items to process'
+      scan_limit:
+        description: 'Items per batch from API'
+        required: false
+        default: '100'
+        type: choice
+        options:
+          - '50'
+          - '100'
+          - '200'
+      treated_limit:
+        description: 'Maximum total items to process'
         required: false
         default: '1000'
         type: choice
@@ -75,7 +84,8 @@ jobs:
           if [ -n "${{ github.event.inputs.collection }}" ]; then
             ARGS="$ARGS --collection ${{ github.event.inputs.collection }}"
           fi
-          ARGS="$ARGS --limit ${{ github.event.inputs.limit || '1000' }}"
+          ARGS="$ARGS --scan-limit ${{ github.event.inputs.scan_limit || '100' }}"
+          ARGS="$ARGS --treated-limit ${{ github.event.inputs.treated_limit || '1000' }}"
 
           echo "Command: zotero-mcp update-metadata $ARGS"
           echo "========================================"
@@ -106,7 +116,8 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Run Number**: ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Collection**: ${{ github.event.inputs.collection || 'All' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Limit**: ${{ github.event.inputs.limit || '1000' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Scan Limit**: ${{ github.event.inputs.scan_limit || '100' }} items/batch" >> $GITHUB_STEP_SUMMARY
+          echo "- **Treated Limit**: ${{ github.event.inputs.treated_limit || '1000' }} items total" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           if [ -f metadata-update.log ]; then
