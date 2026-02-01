@@ -137,6 +137,7 @@ Business logic organized by domain:
 
 **Common Services:**
 - `common/ai_filter.py` - AI-powered keyword filtering
+- `common/collection_scanner.py` - Shared collection scanning utilities for batch operations
 - `common/zotero_item_creator.py` - Unified item creation logic
 - `common/retry.py` - Retry with exponential backoff
 
@@ -193,6 +194,37 @@ Output formatters (Markdown, JSON, BibTeX)
 - **Type hints**: Required on all functions
 - **Naming**: `snake_case` (variables/functions), `PascalCase` (classes), `UPPER_CASE` (constants)
 - **Imports**: Absolute imports only (`from zotero_mcp.services import ...`)
+
+## Code Simplification Best Practices
+
+When working with this codebase, follow these guidelines to maintain code simplicity:
+
+1. **Keep functions focused**: Single responsibility per function. If a function exceeds 50-100 lines, consider breaking it down.
+
+2. **Use shared utilities**: Leverage common utilities in `services/common/`:
+   - `collection_scanner.py` - For batch collection scanning patterns
+   - `retry.py` - For retry logic with exponential backoff
+   - `zotero_item_creator.py` - For unified item creation
+
+3. **Avoid duplication**: Before writing new code, check if similar patterns exist. Examples:
+   - Collection scanning with pagination: Use `scan_collections()`
+   - Item conversion: Consolidate duplicate mapping logic
+   - Error handling: Use consistent patterns across services
+
+4. **Extract configuration objects**: For functions with many parameters (>5), consider using a dataclass or Pydantic model to group related parameters.
+
+5. **Pipeline pattern**: For multi-step processing (e.g., fetch → validate → transform → save), break down into smaller methods that can be tested independently.
+
+6. **Example - WorkflowService simplification**: The `_analyze_single_item` method was refactored from 185 lines into focused helpers:
+   - `_should_skip_item()` - Skip condition checks
+   - `_extract_bundle_context()` - Context extraction
+   - `_validate_context()` - Context validation
+   - `_call_llm_analysis()` - LLM interaction
+   - `_delete_old_notes()` - Note cleanup
+   - `_generate_html_note()` - Note formatting
+   - `_save_note()` - Note persistence
+
+This makes the code more testable, readable, and easier to modify.
 
 ## Adding a New MCP Tool
 

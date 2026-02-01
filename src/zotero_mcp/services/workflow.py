@@ -424,54 +424,28 @@ class WorkflowService:
         start_time = time.time()
 
         try:
-            # 1. Check skip condition (using notes from bundle if available, or fetch)
+            # 1. Check if should skip
             existing_notes = bundle.get("notes", [])
+            if skip_result := self._should_skip_item(
+                item, existing_notes, skip_existing, delete_old_notes, start_time
+            ):
+                return skip_result
 
-            if skip_existing and not delete_old_notes:
-                # If bundle has notes and we're not deleting them, skip
-                if existing_notes:
-                    return ItemAnalysisResult(
-                        item_key=item.key,
-                        title=item.title,
-                        success=True,
-                        skipped=True,
-                        skip_reason="已有分析笔记",
-                        processing_time=time.time() - start_time,
-                    )
-
-            # 2. Extract Context from Bundle
-            metadata = bundle.get("metadata", {})
-            # Note: item object (SearchResultItem) has formatted creators, but metadata dict has raw list
-            # We can use item.authors or format from metadata
-
-            fulltext = bundle.get("fulltext")
-            if not fulltext:
-                return ItemAnalysisResult(
-                    item_key=item.key,
-                    title=item.title,
-                    success=False,
-                    error="无法获取 PDF 全文内容",
-                    processing_time=time.time() - start_time,
-                )
-
-            annotations = bundle.get("annotations", [])
+            # 2. Extract context
+            context = self._extract_bundle_context(bundle)
+            if error_result := self._validate_context(item, context, start_time):
+                return error_result
 
             # 3. Call LLM
-            # Use JSON template for structured output
-            if use_structured and template is None:
-                template = DEFAULT_ANALYSIS_TEMPLATE_JSON
-
-            analysis_content = await llm_client.analyze_paper(
-                title=item.title,
-                authors=item.authors,
-                journal=metadata.get("data", {}).get("publicationTitle"),
-                date=item.date,
-                doi=item.doi,
-                fulltext=fulltext,
-                annotations=annotations,
+            template = DEFAULT_ANALYSIS_TEMPLATE_JSON if use_structured and template is None else template
+            analysis_content = await self._call_llm_analysis(
+                item=item,
+                llm_client=llm_client,
+                metadata=bundle.get("metadata", {}),
+                fulltext=context["fulltext"],
+                annotations=context["annotations"],
                 template=template,
             )
-
             if not analysis_content:
                 return ItemAnalysisResult(
                     item_key=item.key,
@@ -481,88 +455,23 @@ class WorkflowService:
                     processing_time=time.time() - start_time,
                 )
 
-            # 4. Generate HTML note
+            # 4. Save note (if not dry run)
             note_key = None
             if not dry_run:
-                # 4a. Delete old notes if requested
-                if delete_old_notes and existing_notes:
-                    for old_note in existing_notes:
-                        old_key = old_note.get("key") or old_note.get("data", {}).get(
-                            "key"
-                        )
-                        if old_key:
-                            try:
-                                await self.data_service.delete_item(old_key)
-                                logger.debug(
-                                    f"Deleted old note {old_key} from {item.key}"
-                                )
-                            except Exception as e:
-                                logger.warning(
-                                    f"Failed to delete old note {old_key}: {e}"
-                                )
+                if delete_old_notes:
+                    await self._delete_old_notes(item.key, existing_notes)
 
-                # 4b. Generate HTML
-                html_note = None
-                if use_structured:
-                    try:
-                        parser = get_structured_note_parser()
-                        renderer = get_structured_note_renderer()
-                        blocks = parser.parse(analysis_content)
-                        html_note = renderer.render(blocks, title=item.title)
-                        logger.info(
-                            f"Generated structured note with {len(blocks)} blocks"
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            f"Structured parsing failed: {e}, falling back to Markdown"
-                        )
-
-                # Fallback to markdown if structured parsing failed or not used
-                if html_note is None:
-                    journal = metadata.get("data", {}).get("publicationTitle") or "未知"
-                    basic_info = (
-                        f"# AI分析 - {item.title}\n\n"
-                        f"## 论文基本信息\n\n"
-                        f"- **标题**: {item.title}\n"
-                        f"- **作者**: {item.authors or '未知'}\n"
-                        f"- **期刊**: {journal}\n"
-                        f"- **发表日期**: {item.date or '未知'}\n"
-                        f"- **DOI**: {item.doi or '未知'}\n\n"
-                        f"---\n\n"
-                        f"{analysis_content}\n"
-                    )
-                    html_note = markdown_to_html(basic_info)
-                    html_note = beautify_ai_note(html_note)
-
-                # Generate tags: AI分析 + LLM provider name
-                # Format provider name properly (DeepSeek, Claude)
-                provider_map = {
-                    "deepseek": "DeepSeek",
-                    "claude-cli": "Claude",
-                    "claude": "Claude",
-                }
-                provider_name = provider_map.get(
-                    llm_client.provider,
-                    llm_client.provider.capitalize()
-                    if llm_client.provider != "claude-cli"
-                    else "Claude",
+                html_note = self._generate_html_note(
+                    item=item,
+                    metadata=bundle.get("metadata", {}),
+                    analysis_content=analysis_content,
+                    use_structured=use_structured,
                 )
-                note_tags = ["AI分析", provider_name]
-
-                result = await self.data_service.create_note(
-                    parent_key=item.key,
-                    content=html_note,
-                    tags=note_tags,
+                note_key = await self._save_note(
+                    item=item,
+                    html_note=html_note,
+                    llm_client=llm_client,
                 )
-
-                # Extract note key
-                if isinstance(result, dict):
-                    success = result.get("successful", {})
-                    if success:
-                        note_data = list(success.values())[0] if success else {}
-                        note_key = note_data.get("key", "unknown")
-
-                # 4c. Move item to target collection if specified
                 if move_to_collection and note_key:
                     await self._move_to_collection(item, move_to_collection)
 
@@ -583,6 +492,130 @@ class WorkflowService:
                 error=str(e),
                 processing_time=time.time() - start_time,
             )
+
+    def _should_skip_item(
+        self, item: Any, existing_notes: list, skip_existing: bool,
+        delete_old_notes: bool, start_time: float
+    ) -> ItemAnalysisResult | None:
+        """Check if item should be skipped. Returns skip result or None."""
+        if skip_existing and not delete_old_notes and existing_notes:
+            return ItemAnalysisResult(
+                item_key=item.key,
+                title=item.title,
+                success=True,
+                skipped=True,
+                skip_reason="已有分析笔记",
+                processing_time=time.time() - start_time,
+            )
+        return None
+
+    def _extract_bundle_context(self, bundle: dict[str, Any]) -> dict[str, Any]:
+        """Extract relevant context from bundle."""
+        return {
+            "fulltext": bundle.get("fulltext"),
+            "annotations": bundle.get("annotations", []),
+        }
+
+    def _validate_context(
+        self, item: Any, context: dict[str, Any], start_time: float
+    ) -> ItemAnalysisResult | None:
+        """Validate extracted context. Returns error result if invalid."""
+        if not context["fulltext"]:
+            return ItemAnalysisResult(
+                item_key=item.key,
+                title=item.title,
+                success=False,
+                error="无法获取 PDF 全文内容",
+                processing_time=time.time() - start_time,
+            )
+        return None
+
+    async def _call_llm_analysis(
+        self, item: Any, llm_client: Any, metadata: dict,
+        fulltext: str, annotations: list, template: str
+    ) -> str | None:
+        """Call LLM to analyze paper."""
+        return await llm_client.analyze_paper(
+            title=item.title,
+            authors=item.authors,
+            journal=metadata.get("data", {}).get("publicationTitle"),
+            date=item.date,
+            doi=item.doi,
+            fulltext=fulltext,
+            annotations=annotations,
+            template=template,
+        )
+
+    async def _delete_old_notes(self, item_key: str, notes: list) -> None:
+        """Delete existing notes for an item."""
+        for note in notes:
+            note_key = note.get("key") or note.get("data", {}).get("key")
+            if note_key:
+                try:
+                    await self.data_service.delete_item(note_key)
+                    logger.debug(f"Deleted old note {note_key} from {item_key}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete old note {note_key}: {e}")
+
+    def _generate_html_note(
+        self, item: Any, metadata: dict, analysis_content: str, use_structured: bool
+    ) -> str:
+        """Generate HTML note from analysis content."""
+        # Try structured parsing
+        if use_structured:
+            try:
+                parser = get_structured_note_parser()
+                renderer = get_structured_note_renderer()
+                blocks = parser.parse(analysis_content)
+                html_note = renderer.render(blocks, title=item.title)
+                logger.info(f"Generated structured note with {len(blocks)} blocks")
+                return html_note
+            except Exception as e:
+                logger.warning(f"Structured parsing failed: {e}, falling back to Markdown")
+
+        # Fallback to markdown
+        journal = metadata.get("data", {}).get("publicationTitle") or "未知"
+        basic_info = (
+            f"# AI分析 - {item.title}\n\n"
+            f"## 论文基本信息\n\n"
+            f"- **标题**: {item.title}\n"
+            f"- **作者**: {item.authors or '未知'}\n"
+            f"- **期刊**: {journal}\n"
+            f"- **发表日期**: {item.date or '未知'}\n"
+            f"- **DOI**: {item.doi or '未知'}\n\n"
+            f"---\n\n"
+            f"{analysis_content}\n"
+        )
+        return beautify_ai_note(markdown_to_html(basic_info))
+
+    async def _save_note(self, item: Any, html_note: str, llm_client: Any) -> str | None:
+        """Save note to item and return note key."""
+        # Generate tags: AI分析 + LLM provider name
+        provider_map = {
+            "deepseek": "DeepSeek",
+            "claude-cli": "Claude",
+            "claude": "Claude",
+        }
+        provider_name = provider_map.get(
+            llm_client.provider,
+            "Claude" if llm_client.provider == "claude-cli"
+            else llm_client.provider.capitalize(),
+        )
+        note_tags = ["AI分析", provider_name]
+
+        result = await self.data_service.create_note(
+            parent_key=item.key,
+            content=html_note,
+            tags=note_tags,
+        )
+
+        # Extract note key
+        if isinstance(result, dict):
+            success = result.get("successful", {})
+            if success:
+                note_data = list(success.values())[0] if success else {}
+                return note_data.get("key", "unknown")
+        return None
 
     async def _move_to_collection(self, item: Any, target_collection_name: str) -> None:
         """Move item to target collection (add to target, remove from source).
