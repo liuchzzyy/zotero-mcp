@@ -471,7 +471,12 @@ class DuplicateDetectionService:
             )
             return 0
 
-        trash_key = trash_coll.get("key", "")
+        # Extract collection key from data field
+        trash_key = trash_coll.get("data", {}).get("key", "")
+        if not trash_key:
+            logger.error(f"Failed to extract key from trash collection")
+            return 0
+
         moved_count = 0
 
         for group in duplicate_groups:
