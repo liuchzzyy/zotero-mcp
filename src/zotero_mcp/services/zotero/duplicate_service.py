@@ -52,7 +52,7 @@ class DuplicateDetectionService:
         scan_limit: int = 500,
         treated_limit: int = 1000,
         dry_run: bool = False,
-        trash_collection: str = "06 - TRASHES",
+        trash_collection: str = "06_TRASHES",
     ) -> dict[str, Any]:
         """
         Find and remove duplicate items.
@@ -606,6 +606,17 @@ class DuplicateDetectionService:
         for group in duplicate_groups:
             for dup_key in group.duplicate_keys:
                 try:
+                    # Check if item is a note or attachment (skip these)
+                    item = await self.item_service.api_client.get_item(dup_key)
+                    item_type = item.get("data", {}).get("itemType", "")
+
+                    if item_type in ["note", "attachment"]:
+                        logger.info(
+                            f"  ⊘ Skipping {item_type} item {dup_key} "
+                            f"(notes/attachments are not moved)"
+                        )
+                        continue
+
                     # Move item to trash collection
                     await async_retry_with_backoff(
                         lambda k=dup_key, tk=trash_key: self._move_item_to_collection(k, tk),
@@ -679,7 +690,18 @@ class DuplicateDetectionService:
         """
         # Get item data to find current collections
         item = await self.item_service.api_client.get_item(item_key)
+
+        # Get collections from item data (may not exist for notes/attachments)
         collections = item.get("data", {}).get("collections", [])
+
+        # Ensure collections is a list and handle None
+        if collections is None:
+            collections = []
+        elif not isinstance(collections, list):
+            logger.warning(
+                f"Item {item_key}: collections is {type(collections)}, expected list"
+            )
+            collections = []
 
         # Remove from all current collections
         for collection_key in collections:
