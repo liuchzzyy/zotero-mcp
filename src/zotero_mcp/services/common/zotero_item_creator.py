@@ -1,5 +1,6 @@
 """Common Zotero item creation logic for RSS and Gmail workflows."""
 
+import asyncio
 from datetime import datetime
 import logging
 
@@ -117,6 +118,28 @@ class ZoteroItemCreator:
             logger.error(f"  ✗ Error creating item '{enhanced_title[:50]}': {e}")
             return None
 
+    async def _safe_search(self, query: str, description: str, **kwargs) -> list | None:
+        """Search with full error handling for pyzotero 429 edge cases.
+
+        pyzotero may silently swallow 429 errors and return malformed data.
+        This wrapper catches all errors and returns None on failure.
+        """
+        try:
+            result = await async_retry_with_backoff(
+                lambda: self.data_service.search_items(query=query, **kwargs),
+                description=description,
+            )
+            if isinstance(result, int):
+                logger.warning(f"  → {description} returned HTTP status {result}")
+                return None
+            return result
+        except Exception as e:
+            logger.warning(f"  → {description} failed: {e}")
+            # Rate limit: wait before next call
+            if "429" in str(e):
+                await asyncio.sleep(5)
+            return None
+
     async def _check_duplicates_with_priority(
         self,
         doi: str | None,
@@ -136,49 +159,29 @@ class ZoteroItemCreator:
         """
         # Priority 1: Check by DOI (most reliable)
         if doi:
-            existing_by_doi = await async_retry_with_backoff(
-                lambda: self.data_service.search_items(
-                    query=doi, limit=1, qmode="everything"
-                ),
-                description=f"Search DOI '{doi[:30]}'",
+            existing = await self._safe_search(
+                doi, f"Search DOI '{doi[:30]}'", limit=1, qmode="everything"
             )
-            # Handle HTTP status codes returned as int
-            if isinstance(existing_by_doi, int):
-                logger.warning(f"  → DOI search returned HTTP status {existing_by_doi}")
-            elif existing_by_doi and len(existing_by_doi) > 0:
+            if existing and len(existing) > 0:
                 logger.debug(f"  → Found duplicate by DOI: {doi}")
                 return "doi"
 
         # Priority 2: Check by title (case-insensitive exact match)
-        existing_by_title = await async_retry_with_backoff(
-            lambda: self.data_service.search_items(
-                query=title, qmode="titleCreatorYear", limit=5
-            ),
-            description=f"Search title '{title[:30]}'",
+        existing = await self._safe_search(
+            title, f"Search title '{title[:30]}'", qmode="titleCreatorYear", limit=5
         )
-        # Handle HTTP status codes returned as int
-        if isinstance(existing_by_title, int):
-            logger.warning(f"  → Title search returned HTTP status {existing_by_title}")
-        elif existing_by_title and len(existing_by_title) > 0:
-            # Check for exact title match (case-insensitive)
-            for existing_item in existing_by_title:
+        if existing and len(existing) > 0:
+            for existing_item in existing:
                 if existing_item.title and existing_item.title.lower() == title.lower():
                     logger.debug(f"  → Found duplicate by title: {title}")
                     return "title"
 
         # Priority 3: Check by URL (least reliable, may change)
-        # Only check URL if it's a valid URL (not empty)
         if url:
-            existing_by_url = await async_retry_with_backoff(
-                lambda: self.data_service.search_items(
-                    query=url, limit=1, qmode="everything"
-                ),
-                description=f"Search URL '{url[:30]}'",
+            existing = await self._safe_search(
+                url, f"Search URL '{url[:30]}'", limit=1, qmode="everything"
             )
-            # Handle HTTP status codes returned as int
-            if isinstance(existing_by_url, int):
-                logger.warning(f"  → URL search returned HTTP status {existing_by_url}")
-            elif existing_by_url and len(existing_by_url) > 0:
+            if existing and len(existing) > 0:
                 logger.debug(f"  → Found duplicate by URL: {url}")
                 return "url"
 
