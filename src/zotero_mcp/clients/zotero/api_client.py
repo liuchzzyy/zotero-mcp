@@ -13,11 +13,14 @@ from typing import Any, Literal
 
 from pyzotero import zotero
 
+from zotero_mcp.utils.config.logging import get_logger
 from zotero_mcp.utils.formatting.helpers import is_local_mode
 from zotero_mcp.utils.system.errors import (
     ConfigurationError,
     NotFoundError,
 )
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -86,6 +89,20 @@ class ZoteroAPIClient:
         # Simple case: func is a lambda or function
         return await loop.run_in_executor(None, func)
 
+    @staticmethod
+    def _check_api_result(result: Any, operation: str = "API call") -> list:
+        """Check if pyzotero returned an HTTP status code instead of data.
+
+        pyzotero sometimes returns an int (e.g. 429) on rate limiting
+        instead of raising an exception. Convert these to exceptions
+        so retry mechanisms can handle them.
+        """
+        if isinstance(result, int):
+            raise RuntimeError(
+                f"Zotero API returned HTTP status {result} during {operation}"
+            )
+        return result
+
     # -------------------- Search Methods --------------------
 
     async def search_items(
@@ -108,7 +125,7 @@ class ZoteroAPIClient:
             List of matching items
         """
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
+        result = await loop.run_in_executor(
             None,
             lambda: self.client.items(
                 q=query,
@@ -117,6 +134,7 @@ class ZoteroAPIClient:
                 start=start,
             ),
         )
+        return self._check_api_result(result, "search_items")
 
     async def get_all_items(
         self,
@@ -139,10 +157,11 @@ class ZoteroAPIClient:
         kwargs: dict[str, Any] = {"limit": limit, "start": start}
         if item_type:
             kwargs["itemType"] = item_type
-        return await loop.run_in_executor(
+        result = await loop.run_in_executor(
             None,
             lambda: self.client.items(**kwargs),
         )
+        return self._check_api_result(result, "get_all_items")
 
     async def get_recent_items(
         self,
@@ -160,7 +179,7 @@ class ZoteroAPIClient:
             List of recent items
         """
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
+        result = await loop.run_in_executor(
             None,
             lambda: self.client.items(
                 sort="dateAdded",
@@ -168,6 +187,7 @@ class ZoteroAPIClient:
                 limit=limit,
             ),
         )
+        return self._check_api_result(result, "get_recent_items")
 
     # -------------------- Item Methods --------------------
 
@@ -371,10 +391,11 @@ class ZoteroAPIClient:
             List of items with the tag
         """
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
+        result = await loop.run_in_executor(
             None,
             lambda: self.client.items(tag=tag, limit=limit),
         )
+        return self._check_api_result(result, "get_items_by_tag")
 
     # -------------------- Attachment Methods --------------------
 
