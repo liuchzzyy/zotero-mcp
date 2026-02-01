@@ -77,6 +77,9 @@ class SearchService:
             limit=limit,
             start=offset,
         )
+        if isinstance(items, int):
+            logger.warning(f"Search API returned HTTP status {items}")
+            return []
         return [self._api_item_to_result(item) for item in items]
 
     async def get_recent_items(
@@ -95,6 +98,9 @@ class SearchService:
             List of recent items
         """
         items = await self.api_client.get_recent_items(limit=limit, days=days)
+        if isinstance(items, int):
+            logger.warning(f"Recent items API returned HTTP status {items}")
+            return []
         return [self._api_item_to_result(item) for item in items]
 
     async def search_by_tag(
@@ -119,6 +125,9 @@ class SearchService:
             return []
 
         items = await self.api_client.get_items_by_tag(tags[0], limit=100)
+        if isinstance(items, int):
+            logger.warning(f"Tag search API returned HTTP status {items}")
+            return []
 
         # Filter by additional tags
         for tag in tags[1:]:
