@@ -150,7 +150,8 @@ class ZoteroSemanticSearch:
 
     def _get_items_from_source(
         self,
-        limit: int | None = None,
+        scan_limit: int = 100,
+        treated_limit: int | None = None,
         extract_fulltext: bool = False,
         chroma_client: ChromaClient | None = None,
         force_rebuild: bool = False,
@@ -158,17 +159,19 @@ class ZoteroSemanticSearch:
         """Get items from either local database or API."""
         if extract_fulltext and is_local_mode():
             return self._get_items_from_local_db(
-                limit,
+                scan_limit,
+                treated_limit,
                 extract_fulltext=extract_fulltext,
                 chroma_client=chroma_client,
                 force_rebuild=force_rebuild,
             )
         else:
-            return self._get_items_from_api(limit)
+            return self._get_items_from_api(scan_limit, treated_limit)
 
     def _get_items_from_local_db(
         self,
-        limit: int | None = None,
+        scan_limit: int = 100,
+        treated_limit: int | None = None,
         extract_fulltext: bool = False,
         chroma_client: ChromaClient | None = None,
         force_rebuild: bool = False,
@@ -204,7 +207,7 @@ class ZoteroSemanticSearch:
                 sys.stderr.write("Scanning local Zotero database for items...\n")
 
                 # Get items using the new client method
-                local_items = reader.get_items(limit=limit, include_fulltext=False)
+                local_items = reader.get_items(limit=treated_limit, include_fulltext=False)
                 candidate_count = len(local_items)
                 sys.stderr.write(f"Found {candidate_count} candidate items.\n")
 
@@ -304,17 +307,21 @@ class ZoteroSemanticSearch:
             logger.info("Falling back to API...")
             return self._get_items_from_api(limit)
 
-    def _get_items_from_api(self, limit: int | None = None) -> list[dict[str, Any]]:
-        """Get items from Zotero API."""
-        logger.info("Fetching items from Zotero API...")
+    def _get_items_from_api(
+        self, scan_limit: int = 100, treated_limit: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Get items from Zotero API with batch scanning."""
+        logger.info(
+            f"Fetching items from Zotero API (batch: {scan_limit}, max: {treated_limit or 'all'})..."
+        )
 
-        batch_size = 100
+        batch_size = scan_limit
         start = 0
         all_items = []
 
         while True:
             batch_params = {"start": start, "limit": batch_size}
-            if limit and len(all_items) >= limit:
+            if treated_limit and len(all_items) >= treated_limit:
                 break
 
             try:
@@ -341,15 +348,19 @@ class ZoteroSemanticSearch:
             if len(items) < batch_size:
                 break
 
-        if limit:
-            all_items = all_items[:limit]
+        if treated_limit:
+            all_items = all_items[:treated_limit]
+
+        logger.info(f"Retrieved {len(all_items)} items from API")
+        return all_items
 
         return all_items
 
     def update_database(
         self,
         force_full_rebuild: bool = False,
-        limit: int | None = None,
+        scan_limit: int = 100,
+        treated_limit: int | None = None,
         extract_fulltext: bool = False,
     ) -> dict[str, Any]:
         """Update the semantic search database."""
@@ -373,7 +384,8 @@ class ZoteroSemanticSearch:
                 self.chroma_client.reset_collection()
 
             all_items = self._get_items_from_source(
-                limit=limit,
+                scan_limit=scan_limit,
+                treated_limit=treated_limit,
                 extract_fulltext=extract_fulltext,
                 chroma_client=self.chroma_client if not force_full_rebuild else None,
                 force_rebuild=force_full_rebuild,

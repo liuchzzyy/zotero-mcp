@@ -146,10 +146,12 @@ class ItemService:
         self._cache.invalidate("get_collections", {"key": "collections_list"})
 
     async def get_collection_items(
-        self, collection_key: str, limit: int = 100
+        self, collection_key: str, limit: int = 100, start: int = 0
     ) -> list[SearchResultItem]:
         """Get items in a collection."""
-        items = await self.api_client.get_collection_items(collection_key, limit)
+        items = await self.api_client.get_collection_items(
+            collection_key, limit, start
+        )
         return [self._api_item_to_result(item) for item in items]
 
     async def find_collection_by_name(

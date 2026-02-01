@@ -293,6 +293,7 @@ class ZoteroAPIClient:
         self,
         collection_key: str,
         limit: int = 100,
+        start: int = 0,
     ) -> list[dict[str, Any]]:
         """
         Get items in a collection with pagination support.
@@ -300,6 +301,7 @@ class ZoteroAPIClient:
         Args:
             collection_key: Collection key
             limit: Maximum results (will fetch all items if limit is None)
+            start: Starting offset for pagination (default: 0)
 
         Returns:
             List of items in collection
@@ -309,7 +311,7 @@ class ZoteroAPIClient:
         def fetch_all_items():
             """Fetch all items with pagination."""
             all_items = []
-            start = 0
+            current_start = start
             page_size = 100  # pyzotero max per request
 
             while True:
@@ -326,14 +328,14 @@ class ZoteroAPIClient:
 
                 # Fetch items with start parameter for pagination
                 items = self.client.collection_items(
-                    collection_key, limit=fetch_size, start=start
+                    collection_key, limit=fetch_size, start=current_start
                 )
 
                 if not items:
                     break
 
                 all_items.extend(items)
-                start += len(items)
+                current_start += len(items)
 
                 # If we got fewer items than requested, we've reached the end
                 if len(items) < fetch_size:

@@ -59,7 +59,8 @@ class GlobalScanner:
 
     async def scan_and_process(
         self,
-        limit: int = 20,
+        scan_limit: int = 100,
+        treated_limit: int = 20,
         target_collection: str | None = "01_SHORTTERMS",
         dry_run: bool = False,
         llm_provider: str = "auto",
@@ -71,12 +72,13 @@ class GlobalScanner:
         Multi-stage strategy:
         1. Scan items in source_collection (default: 00_INBOXS)
         2. If need more items, scan all other collections
-        3. Accumulate candidates until reaching limit
+        3. Accumulate candidates until reaching treated_limit
         4. Filter to items with PDFs but lacking "AI分析" tag
-        5. Process up to `limit` items
+        5. Process up to `treated_limit` items
 
         Args:
-            limit: Maximum number of items to process
+            scan_limit: Number of items to fetch per batch from API
+            treated_limit: Maximum total number of items to process
             target_collection: Collection name to move items after analysis (default: 01_SHORTTERMS)
             dry_run: Preview only, no changes
             llm_provider: LLM provider for analysis (auto/claude-cli)
@@ -100,7 +102,7 @@ class GlobalScanner:
                 if collections:
                     collection_key = collections[0]["key"]
                     items = await self.data_service.get_collection_items(
-                        collection_key, limit=500
+                        collection_key, limit=scan_limit
                     )
                     logger.info(f"Found {len(items)} items in '{source_collection}'")
                     total_scanned += len(items)
@@ -113,7 +115,7 @@ class GlobalScanner:
                             logger.info(
                                 f"  ✓ Candidate: {item.title[:60]}... (key: {item.key})"
                             )
-                            if len(candidates) >= limit:
+                            if len(candidates) >= treated_limit:
                                 break
                 else:
                     logger.warning(
@@ -123,13 +125,13 @@ class GlobalScanner:
                 logger.info("No source collection specified, skipping to Stage 2")
 
             # Stage 2: If need more candidates, scan entire library
-            if len(candidates) < limit:
-                remaining_needed = limit - len(candidates)
+            if len(candidates) < treated_limit:
+                remaining_needed = treated_limit - len(candidates)
                 logger.info(
                     f"Stage 2: Need {remaining_needed} more items, scanning entire library"
                 )
 
-                all_items = await self.data_service.get_all_items(limit=500)
+                all_items = await self.data_service.get_all_items(limit=scan_limit)
                 total_scanned += len(all_items)
 
                 for item in all_items:
@@ -143,7 +145,7 @@ class GlobalScanner:
                         logger.info(
                             f"  ✓ Candidate: {item.title[:60]}... (key: {item.key})"
                         )
-                        if len(candidates) >= limit:
+                        if len(candidates) >= treated_limit:
                             break
 
             logger.info(
