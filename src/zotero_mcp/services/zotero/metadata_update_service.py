@@ -276,47 +276,47 @@ class MetadataUpdateService:
         """
         Build updated item data by merging current and enhanced metadata.
 
-        Only fills in missing fields, doesn't overwrite existing data.
+        Overwrites existing fields with API data (except title).
         """
         updated = current_data.copy()
 
-        # DOI (always update if we have a better one)
-        if enhanced_metadata.get("doi") and not updated.get("DOI"):
+        # DOI (always overwrite with API data)
+        if enhanced_metadata.get("doi"):
             updated["DOI"] = enhanced_metadata["doi"]
 
         # Title (keep current, don't overwrite)
-        # Users may have custom titles
+        # Users may have custom titles, so we preserve them
 
-        # Authors (update if missing)
-        if enhanced_metadata.get("authors") and not updated.get("creators"):
+        # Authors (overwrite with API data)
+        if enhanced_metadata.get("authors"):
             updated["creators"] = self._convert_authors(enhanced_metadata["authors"])
 
-        # Journal/Publication
-        if enhanced_metadata.get("journal") and not updated.get("publicationTitle"):
+        # Journal/Publication (overwrite with API data)
+        if enhanced_metadata.get("journal"):
             updated["publicationTitle"] = enhanced_metadata["journal"]
 
-        # Publisher
-        if enhanced_metadata.get("publisher") and not updated.get("publisher"):
+        # Publisher (overwrite with API data)
+        if enhanced_metadata.get("publisher"):
             updated["publisher"] = enhanced_metadata["publisher"]
 
-        # Date/Year
-        if enhanced_metadata.get("year") and not updated.get("date"):
+        # Date/Year (overwrite with API data)
+        if enhanced_metadata.get("year"):
             updated["date"] = str(enhanced_metadata["year"])
 
-        # Volume
-        if enhanced_metadata.get("volume") and not updated.get("volume"):
+        # Volume (overwrite with API data)
+        if enhanced_metadata.get("volume"):
             updated["volume"] = enhanced_metadata["volume"]
 
-        # Issue
-        if enhanced_metadata.get("issue") and not updated.get("issue"):
+        # Issue (overwrite with API data)
+        if enhanced_metadata.get("issue"):
             updated["issue"] = enhanced_metadata["issue"]
 
-        # Pages
-        if enhanced_metadata.get("pages") and not updated.get("pages"):
+        # Pages (overwrite with API data)
+        if enhanced_metadata.get("pages"):
             updated["pages"] = enhanced_metadata["pages"]
 
-        # Abstract
-        if enhanced_metadata.get("abstract") and not updated.get("abstractNote"):
+        # Abstract (overwrite with API data)
+        if enhanced_metadata.get("abstract"):
             updated["abstractNote"] = enhanced_metadata["abstract"]
 
         # URL (use enhanced URL if better)
@@ -327,11 +327,11 @@ class MetadataUpdateService:
             if not current_url or "doi.org" in enhanced_url:
                 updated["url"] = enhanced_url
 
-        # ISSN
-        if enhanced_metadata.get("issn") and not updated.get("ISSN"):
+        # ISSN (overwrite with API data)
+        if enhanced_metadata.get("issn"):
             updated["ISSN"] = enhanced_metadata["issn"]
 
-        # Item type (keep current unless it's generic)
+        # Item type (overwrite if current is generic)
         current_type = updated.get("itemType", "")
         enhanced_type = enhanced_metadata.get("item_type", "")
         if current_type in ["", "document"] and enhanced_type:
