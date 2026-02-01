@@ -16,9 +16,11 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from zotero_mcp.clients.chroma import ChromaClient, create_chroma_client
-from zotero_mcp.clients.local_db import LocalDatabaseClient
-from zotero_mcp.clients.zotero_client import get_zotero_client
+from zotero_mcp.clients.database import ChromaClient, create_chroma_client
+from zotero_mcp.clients.zotero import (
+    LocalDatabaseClient,
+    get_zotero_client,
+)
 from zotero_mcp.utils.config import get_config_path
 from zotero_mcp.utils.helpers import is_local_mode
 from zotero_mcp.utils.zotero_mapper import ZoteroMapper

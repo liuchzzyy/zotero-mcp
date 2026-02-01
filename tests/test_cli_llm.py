@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from zotero_mcp.clients.cli_llm import CLILLMClient, is_cli_llm_available
+from zotero_mcp.clients.llm import CLILLMClient, is_cli_llm_available
 from zotero_mcp.models.rss import RSSItem
 from zotero_mcp.services.common import PaperFilter
 
@@ -25,8 +25,8 @@ class TestCLILLMClientInit:
         assert client.model == "opus"
         assert client.timeout == 600
 
-    @patch("zotero_mcp.clients.cli_llm.CLI_LLM_COMMAND", "my-cli")
-    @patch("zotero_mcp.clients.cli_llm.CLI_LLM_TIMEOUT", 120)
+    @patch("zotero_mcp.clients.llm.cli.CLI_LLM_COMMAND", "my-cli")
+    @patch("zotero_mcp.clients.llm.cli.CLI_LLM_TIMEOUT", 120)
     def test_env_config(self):
         """Test that module-level defaults are used when no args provided."""
         client = CLILLMClient(cli_command="my-cli", timeout=120)
@@ -41,7 +41,7 @@ class TestCLILLMClientAnalyze:
     def client(self):
         return CLILLMClient(cli_command="claude")
 
-    @patch("zotero_mcp.clients.cli_llm.shutil.which", return_value="/usr/bin/claude")
+    @patch("zotero_mcp.clients.llm.cli.shutil.which", return_value="/usr/bin/claude")
     async def test_analyze_paper_builds_prompt(self, mock_which, client):
         """Test that analyze_paper writes correct content to temp file."""
         written_content = ""
@@ -68,7 +68,7 @@ class TestCLILLMClientAnalyze:
         assert "Author A, Author B" in written_content
         assert "Nature" in written_content
 
-    @patch("zotero_mcp.clients.cli_llm.shutil.which", return_value="/usr/bin/claude")
+    @patch("zotero_mcp.clients.llm.cli.shutil.which", return_value="/usr/bin/claude")
     async def test_analyze_with_custom_template(self, mock_which, client):
         """Test custom template is included in prompt."""
         written_content = ""
@@ -93,7 +93,7 @@ class TestCLILLMClientAnalyze:
         assert "Custom Template" in written_content
         assert "Analyze this" in written_content
 
-    @patch("zotero_mcp.clients.cli_llm.shutil.which", return_value="/usr/bin/claude")
+    @patch("zotero_mcp.clients.llm.cli.shutil.which", return_value="/usr/bin/claude")
     async def test_analyze_with_annotations(self, mock_which, client):
         """Test annotations are included in prompt."""
         written_content = ""
@@ -133,13 +133,13 @@ class TestCLILLMClientSubprocess:
     def client(self):
         return CLILLMClient(cli_command="claude")
 
-    @patch("zotero_mcp.clients.cli_llm.shutil.which", return_value=None)
+    @patch("zotero_mcp.clients.llm.cli.shutil.which", return_value=None)
     async def test_cli_not_found(self, mock_which, client):
         """Test error when CLI command is not found."""
         with pytest.raises(FileNotFoundError, match="not found in PATH"):
             await client._run_cli_with_file("test content")
 
-    @patch("zotero_mcp.clients.cli_llm.shutil.which", return_value="/usr/bin/claude")
+    @patch("zotero_mcp.clients.llm.cli.shutil.which", return_value="/usr/bin/claude")
     @patch("asyncio.create_subprocess_exec")
     async def test_successful_execution(self, mock_exec, mock_which, client):
         """Test successful CLI execution."""
@@ -165,7 +165,7 @@ class TestCLILLMClientSubprocess:
         assert "Analysis" in result
         assert "Content here" in result
 
-    @patch("zotero_mcp.clients.cli_llm.shutil.which", return_value="/usr/bin/claude")
+    @patch("zotero_mcp.clients.llm.cli.shutil.which", return_value="/usr/bin/claude")
     @patch("asyncio.create_subprocess_exec")
     async def test_cli_returns_error_code(self, mock_exec, mock_which, client):
         """Test CLI returning non-zero exit code with no output."""
@@ -187,7 +187,7 @@ class TestCLILLMClientSubprocess:
         with pytest.raises(RuntimeError, match="CLI exited with code 1"):
             await client._execute_subprocess(["claude", "-p", "test"])
 
-    @patch("zotero_mcp.clients.cli_llm.shutil.which", return_value="/usr/bin/claude")
+    @patch("zotero_mcp.clients.llm.cli.shutil.which", return_value="/usr/bin/claude")
     @patch("asyncio.create_subprocess_exec")
     async def test_empty_output(self, mock_exec, mock_which, client):
         """Test CLI returning empty output."""
@@ -212,11 +212,11 @@ class TestCLILLMClientSubprocess:
 class TestHelpers:
     """Tests for helper functions."""
 
-    @patch("zotero_mcp.clients.cli_llm.shutil.which", return_value="/usr/bin/claude")
+    @patch("zotero_mcp.clients.llm.cli.shutil.which", return_value="/usr/bin/claude")
     def test_is_cli_available_true(self, mock_which):
         assert is_cli_llm_available() is True
 
-    @patch("zotero_mcp.clients.cli_llm.shutil.which", return_value=None)
+    @patch("zotero_mcp.clients.llm.cli.shutil.which", return_value=None)
     def test_is_cli_available_false(self, mock_which):
         assert is_cli_llm_available() is False
 
@@ -334,7 +334,7 @@ class TestPaperFilterCLI:
         assert keywords == []
 
     @patch.dict("os.environ", {"RSS_PROMPT": "I study zinc batteries"})
-    @patch("zotero_mcp.clients.cli_llm.shutil.which", return_value="/usr/bin/claude")
+    @patch("zotero_mcp.clients.llm.cli.shutil.which", return_value="/usr/bin/claude")
     @patch("asyncio.create_subprocess_exec")
     async def test_filter_with_cli_basic_flow(
         self, mock_exec, mock_which, paper_filter
@@ -373,7 +373,7 @@ class TestPaperFilterCLI:
         assert keywords == []
 
     @patch.dict("os.environ", {"RSS_PROMPT": "I study batteries"})
-    @patch("zotero_mcp.clients.cli_llm.shutil.which", return_value="/usr/bin/claude")
+    @patch("zotero_mcp.clients.llm.cli.shutil.which", return_value="/usr/bin/claude")
     @patch("asyncio.create_subprocess_exec")
     async def test_filter_with_cli_batching(self, mock_exec, mock_which, paper_filter):
         """Test that items are split into batches when exceeding BATCH_SIZE."""
@@ -426,7 +426,7 @@ class TestPaperFilterCLI:
         assert len(irrelevant) == 2
 
     @patch.dict("os.environ", {"RSS_PROMPT": "I study batteries"})
-    @patch("zotero_mcp.clients.cli_llm.shutil.which", return_value=None)
+    @patch("zotero_mcp.clients.llm.cli.shutil.which", return_value=None)
     async def test_filter_with_cli_error_handling(self, mock_which, paper_filter):
         """Test that CLI errors are handled gracefully."""
         items = [_make_item("Paper A"), _make_item("Paper B")]

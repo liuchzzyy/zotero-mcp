@@ -7,8 +7,11 @@ Handles search operations for Zotero items using API and Local DB.
 import logging
 from typing import Literal
 
-from zotero_mcp.clients.local_db import LocalDatabaseClient, ZoteroItem
-from zotero_mcp.clients.zotero_client import ZoteroAPIClient
+from zotero_mcp.clients.zotero import (
+    LocalDatabaseClient,
+    ZoteroAPIClient,
+    ZoteroItem,
+)
 from zotero_mcp.models.common import SearchResultItem
 from zotero_mcp.utils.helpers import format_creators
 

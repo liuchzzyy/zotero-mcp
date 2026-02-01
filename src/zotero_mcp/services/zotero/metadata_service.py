@@ -17,8 +17,12 @@ from datetime import datetime
 import logging
 from typing import Any
 
-from zotero_mcp.clients.crossref import CrossrefClient, CrossrefWork
-from zotero_mcp.clients.openalex import OpenAlexClient, OpenAlexWork
+from zotero_mcp.clients.metadata import (
+    CrossrefClient,
+    CrossrefWork,
+    OpenAlexClient,
+    OpenAlexWork,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -7,9 +7,12 @@ Handles CRUD operations for Zotero items, collections, and tags.
 import logging
 from typing import Any
 
-from zotero_mcp.clients.better_bibtex import BetterBibTeXClient
-from zotero_mcp.clients.local_db import LocalDatabaseClient, ZoteroItem
-from zotero_mcp.clients.zotero_client import ZoteroAPIClient
+from zotero_mcp.clients.zotero import (
+    BetterBibTeXClient,
+    LocalDatabaseClient,
+    ZoteroAPIClient,
+    ZoteroItem,
+)
 from zotero_mcp.formatters import BibTeXFormatter
 from zotero_mcp.models.common import SearchResultItem
 from zotero_mcp.utils.cache import ResponseCache
