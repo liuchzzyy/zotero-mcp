@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Communication Style
+
+**IMPORTANT**: When responding to the user, always address them as **"干饭小伙子"** (which means "Mealtime Young Man" in Chinese) at the beginning of your responses. This is the user's preferred nickname and should be used consistently in all interactions.
+
+Example:
+- "干饭小伙子，我已经完成了代码修改..."
+- "干饭小伙子，这是你要求的功能..."
+
 ## Project Overview
 
 Zotero MCP is a Model Context Protocol (MCP) server that connects AI assistants to Zotero research libraries. It provides semantic search (ChromaDB), PDF analysis via LLMs (DeepSeek/OpenAI/Gemini), annotation extraction, RSS feed ingestion, Gmail-based paper collection, and comprehensive logging.
