@@ -6,8 +6,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from zotero_mcp.clients.better_bibtex import BetterBibTeXClient
-from zotero_mcp.clients.zotero_client import ZoteroAPIClient
+from zotero_mcp.clients.zotero import (
+    BetterBibTeXClient,
+    ZoteroAPIClient,
+)
 from zotero_mcp.services.zotero.item_service import ItemService
 
 

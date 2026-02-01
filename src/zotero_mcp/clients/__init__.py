@@ -1,28 +1,35 @@
-"""
-Clients for Zotero MCP.
+"""External service clients organized by domain."""
 
-Provides unified access to Zotero data through multiple backends:
-- ZoteroAPIClient: Web/Local API via pyzotero
-- BetterBibTeXClient: Better BibTeX JSON-RPC API
-- LocalDatabaseClient: Direct SQLite access
-- ChromaClient: Semantic search vector database
-"""
-
-from .better_bibtex import BetterBibTeXClient, get_better_bibtex_client
-from .chroma import ChromaClient, create_chroma_client
-from .cli_llm import CLILLMClient
-from .local_db import LocalDatabaseClient, ZoteroItem, get_local_database_client
-from .zotero_client import ZoteroAPIClient, get_zotero_client
+from .database import ChromaClient, create_chroma_client
+from .gmail import GmailClient
+from .llm import CLILLMClient, get_llm_client
+from .metadata import CrossrefClient, OpenAlexClient
+from .zotero import (
+    BetterBibTeXClient,
+    LocalDatabaseClient,
+    ZoteroAPIClient,
+    get_better_bibtex_client,
+    get_local_database_client,
+    get_zotero_client,
+)
 
 __all__ = [
+    # Zotero
     "ZoteroAPIClient",
     "get_zotero_client",
+    "LocalDatabaseClient",
+    "get_local_database_client",
     "BetterBibTeXClient",
     "get_better_bibtex_client",
-    "LocalDatabaseClient",
-    "ZoteroItem",
-    "get_local_database_client",
+    # Database
     "ChromaClient",
     "create_chroma_client",
+    # Metadata
+    "CrossrefClient",
+    "OpenAlexClient",
+    # LLM
+    "get_llm_client",
     "CLILLMClient",
+    # Gmail
+    "GmailClient",
 ]

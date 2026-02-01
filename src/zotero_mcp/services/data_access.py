@@ -9,16 +9,15 @@ from functools import lru_cache
 import logging
 from typing import Any, Literal
 
-from zotero_mcp.clients.better_bibtex import (
+from zotero_mcp.clients.zotero import (
     BetterBibTeXClient,
-    get_better_bibtex_client,
-)
-from zotero_mcp.clients.local_db import (
     LocalDatabaseClient,
+    ZoteroAPIClient,
     ZoteroItem,
+    get_better_bibtex_client,
     get_local_database_client,
+    get_zotero_client,
 )
-from zotero_mcp.clients.zotero_client import ZoteroAPIClient, get_zotero_client
 from zotero_mcp.formatters import JSONFormatter, MarkdownFormatter
 from zotero_mcp.models.common import ResponseFormat, SearchResultItem
 from zotero_mcp.services.zotero.item_service import ItemService

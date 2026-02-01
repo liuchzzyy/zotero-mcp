@@ -356,7 +356,7 @@ def get_llm_client(
         Configured LLMClient or CLILLMClient
     """
     if provider == "claude-cli":
-        from zotero_mcp.clients.cli_llm import CLILLMClient
+        from zotero_mcp.clients.llm.cli import CLILLMClient
 
         return CLILLMClient(model=model)
 

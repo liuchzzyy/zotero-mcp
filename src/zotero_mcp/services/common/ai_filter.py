@@ -628,7 +628,7 @@ Select exactly 10 keywords. Do not include any other text."""
         Returns:
             Set of global indices that are relevant
         """
-        from zotero_mcp.clients.cli_llm import CLILLMClient
+        from zotero_mcp.clients.llm import CLILLMClient
 
         # Build paper list text
         papers_text = self._build_papers_text(batch)
