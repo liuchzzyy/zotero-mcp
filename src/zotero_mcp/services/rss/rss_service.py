@@ -139,6 +139,6 @@ class RSSService:
                 result.items_imported += 1
             else:
                 result.items_duplicate += 1
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(1.0)
 
         return result
