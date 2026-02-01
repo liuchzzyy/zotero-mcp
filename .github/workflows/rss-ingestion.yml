@@ -23,6 +23,7 @@ on:
         default: '150'
         type: choice
         options:
+          - '1'
           - '50'
           - '100'
           - '150'
