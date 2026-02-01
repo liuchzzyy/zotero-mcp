@@ -124,7 +124,7 @@ class DuplicateDetectionService:
         for item in items:
             item_key = item.get("key", "")
             item_data = item.get("data", {})
-            doi = item_data.get("DOI", "").strip()
+            doi = (item_data.get("DOI") or "").strip()
             if doi:
                 doi_groups[doi.lower()].append(item)
 
@@ -163,7 +163,7 @@ class DuplicateDetectionService:
                 continue
 
             item_data = item.get("data", {})
-            url = item_data.get("url", "").strip()
+            url = (item_data.get("url") or "").strip()
             if url:
                 url_groups[url].append(item)
 
