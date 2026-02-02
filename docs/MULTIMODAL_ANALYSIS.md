@@ -54,8 +54,6 @@ uv run zotero-mcp analyze-collection "机器学习" --llm-provider deepseek
 | 提供商 | 特点 | 优势 | 适用场景 |
 |--------|------|------|----------|
 | DeepSeek | 深度学习模型 | 中文理解优秀，成本较低 | 中文文献，学术研究 |
-| OpenAI | GPT系列模型 | 多语言支持强，图像分析能力突出 | 英文文献，多模态任务 |
-| Gemini | Google模型 | 多模态原生支持，推理能力强 | 复杂图表分析，跨模态任务 |
 | Claude | Anthropic模型 | 安全性强，长文本处理优秀 | 大文档分析，需要高质量输出 |
 
 ### 环境变量配置
