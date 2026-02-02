@@ -34,6 +34,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Structured Notes**: Enhanced note templates support image references and table analysis
 - **CLI Improvements**: Added `--multimodal/--no-multimodal` flag to `scan` command
 
+### 🐛 Fixed
+
+#### GitHub Actions Workflows
+- **Gmail Sender Filter**: Fixed workflow to properly use `GMAIL_SENDER_FILTER` environment variable as fallback when manual input is not provided
+- **Deduplicate Log Formatting**:
+  - Enhanced logs with emoji indicators (🔍, 📊, ✓, ⊘, ✅, 🗑️, ➕, ✗)
+  - Distinguished ITEM vs NOTE types in output
+  - Removed unwanted quotes from collection names (triple-quote issue fixed)
+  - Clarified "准备移动" (prepare to move) vs "实际移动" (actually moved) to avoid confusion
+- **Collection Name Display**: Fixed collection name quotes in 3 locations:
+  - Workflow parameter passing (`.github/workflows/deduplicate.yml`)
+  - Service log output (`duplicate_service.py`)
+  - CLI result output (`cli.py`)
+
 ### 📝 Documentation
 
 #### New Documentation
@@ -49,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Capability Tests**: LLM capability detection and validation
 - **Template Tests**: Multi-modal template formatting tests
 - **CLI Tests**: Command-line interface tests for new flags
+- **GitHub Actions**: All workflows tested successfully (scan, metadata, deduplicate, gmail, rss)
 
 ## [2.4.0] - 2026-02-01
 

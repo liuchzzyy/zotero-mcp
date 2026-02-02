@@ -34,6 +34,11 @@ uv run zotero-mcp rss fetch         # Fetch RSS feeds
 uv run zotero-mcp gmail process     # Process Gmail alerts
 uv run zotero-mcp scan              # Scan library for unprocessed papers
 
+# Multi-Modal Analysis
+uv run zotero-mcp scan --multimodal --llm-provider claude-cli  # Use Claude CLI for image analysis
+uv run zotero-mcp scan --no-multimodal --llm-provider deepseek  # Text-only analysis
+uv run zotero-mcp scan --llm-provider auto  # Auto-select based on PDF content
+
 # Testing
 uv run pytest                       # Run all tests
 uv run pytest -v                    # Verbose output
@@ -240,6 +245,69 @@ This makes the code more testable, readable, and easier to modify.
 2. Implement business logic in `services/`
 3. Create tool wrapper in `tools/` with `@mcp.tool` decorator
 4. Register in `tools/__init__.py`
+
+## Multi-Modal PDF Analysis
+
+### Overview
+
+The multi-modal analysis feature enables LLMs to analyze PDF content beyond text, including images (figures, charts, diagrams) and tables. This is particularly useful for research papers where visual content contains critical information.
+
+### LLM Provider Capabilities
+
+Different LLM providers have different capabilities:
+
+| Provider | Vision Support | Use Case |
+|----------|---------------|----------|
+| `claude-cli` | ✅ Yes | Best for papers with figures/charts |
+| `deepseek` | ❌ No | Text-only, fastest/cheapest |
+
+### Auto-Selection Logic
+
+When `llm_provider="auto"`:
+1. **If PDF has images/tables**: Select `claude-cli` (if available) for multi-modal analysis
+2. **If PDF is text-only**: Select `deepseek` for faster, cheaper text analysis
+3. **Fallback**: If preferred LLM unavailable, gracefully degrade to available options
+
+### Usage Examples
+
+```bash
+# Auto-select based on PDF content
+uv run zotero-mcp scan --llm-provider auto --multimodal
+
+# Force Claude CLI for multi-modal analysis
+uv run zotero-mcp scan --llm-provider claude-cli --multimodal
+
+# Text-only analysis (skip image extraction)
+uv run zotero-mcp scan --llm-provider deepseek --no-multimodal
+
+# Specify collection and limits
+uv run zotero-mcp scan \
+  --source-collection "00_INBOXS" \
+  --treated-limit 10 \
+  --llm-provider auto \
+  --multimodal
+```
+
+### How It Works
+
+1. **Content Extraction**: PyMuPDF extracts text, images (as base64), and tables
+2. **Capability Detection**: Checks if selected LLM supports vision
+3. **Template Selection**: Uses multi-modal template if LLM supports vision, text-only otherwise
+4. **Analysis**: LLM analyzes content with appropriate context
+5. **Note Generation**: Creates structured HTML note with figure/table references
+
+### Performance
+
+- **PyMuPDF**: 10x faster than pdfplumber for content extraction
+- **Base64 Encoding**: Images encoded inline (no external storage needed)
+- **Graceful Degradation**: Text-only LLMs receive placeholders instead of crashing
+
+### Configuration
+
+Multi-modal analysis is controlled by:
+- `--multimodal/--no-multimodal`: Enable/disable image/table extraction (default: enabled)
+- `--llm-provider`: Select LLM provider or use "auto" for intelligent selection
+- LLM capability registry in `clients/llm/capabilities.py`
 
 ## Troubleshooting
 
