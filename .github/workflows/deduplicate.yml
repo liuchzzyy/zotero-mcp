@@ -86,7 +86,7 @@ jobs:
           ARGS=""
           ARGS="$ARGS --scan-limit ${{ github.event.inputs.scan_limit || '500' }}"
           ARGS="$ARGS --treated-limit ${{ github.event.inputs.treated_limit || '1000' }}"
-          ARGS="$ARGS --trash-collection '06_TRASHES'"
+          ARGS="$ARGS --trash-collection 06_TRASHES"
 
           if [ -n "${{ github.event.inputs.collection }}" ]; then
             ARGS="$ARGS --collection ${{ github.event.inputs.collection }}"
