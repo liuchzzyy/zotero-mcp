@@ -811,7 +811,7 @@ Examples:
                     f"  Cross-folder copies (skipped): {result.get('cross_folder_copies', 0)}"
                 )
                 print(
-                    f"  Duplicates moved to '{args.trash_collection}': {result['duplicates_removed']}"
+                    f"  Duplicates moved to {args.trash_collection}: {result['duplicates_removed']}"
                 )
                 if result.get("dry_run"):
                     print("  Mode: DRY RUN (no items were moved)")
@@ -828,10 +828,13 @@ Examples:
                         print(f"  [{i}] 匹配类型: {match_name}")
                         print(f"      匹配值: {group.match_value[:60]}...")
                         print(f"      ✅ 保留: {group.primary_key} (信息最全)")
-                        print(
-                            f"      🗑️  移动到垃圾箱: {len(group.duplicate_keys)} 个条目"
-                        )
-                        if len(group.duplicate_keys) <= 3:
+                        # Note: duplicate_keys may include notes/attachments that will be skipped
+                        total_to_move = len(group.duplicate_keys)
+                        if total_to_move > 0:
+                            print(f"      🗑️  准备移动到垃圾箱: {total_to_move} 个条目")
+                        else:
+                            print("      ⊘ 无需移动（仅保留条目）")
+                        if total_to_move <= 3:
                             for dup_key in group.duplicate_keys:
                                 print(f"         - {dup_key}")
                         else:
