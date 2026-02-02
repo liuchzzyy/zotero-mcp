@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import fitz  # pymupdf
 import pytest
 
 from zotero_mcp.clients.zotero.pdf_extractor import MultiModalPDFExtractor
@@ -103,7 +104,7 @@ def test_extract_with_missing_file():
     """Test extraction with missing PDF file."""
     extractor = MultiModalPDFExtractor()
 
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(fitz.FileNotFoundError):
         extractor.extract_elements(Path("nonexistent.pdf"))
 
 
