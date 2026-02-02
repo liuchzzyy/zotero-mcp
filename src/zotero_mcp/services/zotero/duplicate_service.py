@@ -84,7 +84,7 @@ class DuplicateDetectionService:
         Returns:
             Dict with scan statistics and duplicate groups
         """
-        logger.info("Starting duplicate detection...")
+        logger.info("🔍 Starting duplicate detection...")
 
         duplicate_groups: list[DuplicateGroup] = []
         total_scanned = 0
@@ -94,7 +94,7 @@ class DuplicateDetectionService:
         if collection_key:
             collection_keys = [collection_key]
         else:
-            logger.info("Scanning all collections in name order...")
+            logger.info("📚 Scanning all collections in name order...")
             collections = await self.item_service.get_sorted_collections()
             collection_keys = [coll["key"] for coll in collections]
 
@@ -102,7 +102,7 @@ class DuplicateDetectionService:
         for coll_key in collection_keys:
             if total_duplicates_found >= treated_limit:
                 logger.info(
-                    f"Reached treated_limit ({treated_limit} duplicates), stopping scan"
+                    f"⛔ Reached limit ({treated_limit} duplicates), stopping scan"
                 )
                 break
 
@@ -118,16 +118,16 @@ class DuplicateDetectionService:
             cross_folder_copies += cf_copies
 
         logger.info(
-            f"Scanned {total_scanned} items, found {total_duplicates_found} duplicates "
-            f"in {len(duplicate_groups)} groups"
+            f"📊 Scan complete: {total_scanned} items scanned, "
+            f"{total_duplicates_found} duplicates found in {len(duplicate_groups)} groups"
         )
 
         if dry_run:
-            logger.info("DRY RUN: No items will be deleted")
+            logger.info("🔍 DRY RUN: No items will be moved")
             for group in duplicate_groups:
                 logger.info(
-                    f"  -> Would delete {len(group.duplicate_keys)} items "
-                    f"(matched by {group.match_reason}: {group.match_value[:50]})"
+                    f"  → Would move {len(group.duplicate_keys)} items "
+                    f"({group.match_reason}: {group.match_value[:50]})"
                 )
             return {
                 "total_scanned": total_scanned,
@@ -143,7 +143,7 @@ class DuplicateDetectionService:
             duplicate_groups, trash_collection=trash_collection
         )
 
-        logger.info(f"Removed {duplicates_removed} duplicate items")
+        logger.info(f"✅ Removed {duplicates_removed} duplicate ITEM(s)")
 
         return {
             "total_scanned": total_scanned,
@@ -487,8 +487,8 @@ class DuplicateDetectionService:
 
                     if item_type in ("note", "attachment"):
                         logger.info(
-                            f"  Skipping {item_type} item {dup_key} "
-                            f"(notes/attachments are not moved)"
+                            f"  ⊘ Skipping {item_type.upper()} {dup_key} "
+                            f"({item_type}s are preserved)"
                         )
                         continue
 
@@ -499,7 +499,7 @@ class DuplicateDetectionService:
                         description=f"Move duplicate item {dup_key} to {trash_collection}",
                     )
                     logger.info(
-                        f"  Moved duplicate {dup_key} to '{trash_collection}' "
+                        f"  ✓ Moved ITEM {dup_key} → '{trash_collection}' "
                         f"(matched by {group.match_reason})"
                     )
                     moved_count += 1
@@ -517,13 +517,10 @@ class DuplicateDetectionService:
         )
 
         if collections:
-            trash_key = collections[0].get("data", {}).get("key", "")
-            logger.info(
-                f"Using existing trash collection: '{collection_name}' (key: {trash_key})"
-            )
+            logger.info(f"🗑️  Using existing trash collection: '{collection_name}'")
             return collections[0]
 
-        logger.info(f"Creating new trash collection: {collection_name}")
+        logger.info(f"➕ Creating new trash collection: {collection_name}")
         try:
             result = await self.item_service.create_collection(collection_name)
             if isinstance(result, dict) and "success" in result:
@@ -531,14 +528,11 @@ class DuplicateDetectionService:
                     collection_name, exact_match=True
                 )
                 if collections:
-                    trash_key = collections[0].get("data", {}).get("key", "")
-                    logger.info(
-                        f"Created trash collection: '{collection_name}' (key: {trash_key})"
-                    )
+                    logger.info(f"✓ Created trash collection: '{collection_name}'")
                     return collections[0]
             return result
         except Exception as e:
-            logger.error(f"Failed to create trash collection: {e}")
+            logger.error(f"✗ Failed to create trash collection: {e}")
             return None
 
     async def _move_item_to_collection(

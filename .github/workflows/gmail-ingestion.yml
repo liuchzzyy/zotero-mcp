@@ -92,7 +92,11 @@ jobs:
           ARGS="--collection ${{ github.event.inputs.collection_name || '00_INBOXS' }}"
           ARGS="$ARGS --max-emails ${{ github.event.inputs.max_emails || '100' }}"
 
-          SENDER="${{ github.event.inputs.sender_filter }}"
+          # Use workflow input if provided, otherwise fall back to secret/env var
+          SENDER="${{ github.event.inputs.sender_filter || '' }}"
+          if [ -z "$SENDER" ] && [ -n "$GMAIL_SENDER_FILTER" ]; then
+            SENDER="$GMAIL_SENDER_FILTER"
+          fi
           if [ -n "$SENDER" ]; then
             ARGS="$ARGS --sender $SENDER"
           fi
