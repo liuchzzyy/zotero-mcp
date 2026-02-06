@@ -330,3 +330,94 @@ class ZoteroClient:
             raise ZoteroClientError(
                 f"Failed to remove tags from item {item_key}: {e}"
             ) from e
+
+    async def search_items(
+        self,
+        query: str,
+        limit: int = 100,
+        start: int = 0,
+        mode: str = "titleCreatorYear",
+        item_type: str | None = None,
+        tags: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Search items using Zotero API's search functionality.
+
+        Args:
+            query: Search query string
+            limit: Maximum number of items to return
+            start: Offset for pagination
+            mode: Search mode ("titleCreatorYear" or "everything")
+            item_type: Filter by item type (e.g., "-attachment" to exclude)
+            tags: Filter by tags (AND logic)
+
+        Returns:
+            List of matching item data dicts
+
+        Raises:
+            ZoteroClientError: If API request fails
+        """
+        try:
+            # Build search parameters
+            params = {"q": query}
+            if item_type:
+                params["itemType"] = item_type
+            if tags:
+                params["tag"] = ",".join(tags)
+
+            # Use pyzotero's add_parameters for search
+            # Build the full items call with parameters
+            items = await asyncio.to_thread(
+                lambda: self.client.add_parameters(**params).items(
+                    limit=limit, start=start
+                ),
+            )
+
+            # pyzotero can return int status codes instead of data
+            if isinstance(items, int):
+                raise ZoteroClientError(
+                    f"Zotero API returned HTTP {items} when searching items"
+                )
+
+            return items
+        except Exception as e:
+            if isinstance(e, ZoteroClientError):
+                raise
+            raise ZoteroClientError(f"Failed to search items: {e}") from e
+
+    async def get_tags(self) -> list[str]:
+        """
+        Get all tags in the library.
+
+        Returns:
+            List of tag names
+
+        Raises:
+            ZoteroClientError: If API request fails
+        """
+        try:
+            tags = await asyncio.to_thread(self.client.tags)
+
+            # pyzotero can return int status codes instead of data
+            if isinstance(tags, int):
+                raise ZoteroClientError(
+                    f"Zotero API returned HTTP {tags} when fetching tags"
+                )
+
+            # pyzotero returns list of tag dicts with "tag" field
+            if isinstance(tags, list):
+                result = []
+                for tag in tags:
+                    if isinstance(tag, dict):
+                        tag_name = tag.get("tag", "")
+                        if tag_name:  # Only add non-empty tags
+                            result.append(tag_name)
+                    else:
+                        result.append(tag)
+                return result
+
+            return tags
+        except Exception as e:
+            if isinstance(e, ZoteroClientError):
+                raise
+            raise ZoteroClientError(f"Failed to fetch tags: {e}") from e
