@@ -1,15 +1,44 @@
 # paper-feed
 
-Academic paper collection framework supporting RSS feeds and Gmail alerts.
+**A modular Python framework for collecting, filtering, and exporting academic papers from RSS feeds and email alerts.**
+
+paper-feed provides a clean, extensible architecture for building custom paper collection workflows. Fetch papers from arXiv, bioRxiv, Nature, and other sources, filter by keywords/categories/authors, and export to JSON or Zotero.
+
+## Features
+
+### Currently Implemented
+
+- **RSS Feed Source**
+  - Fetch from arXiv, bioRxiv, Nature, Science, PNAS, ACS, and more
+  - Auto-detects source from URL
+  - Configurable timeout and user-agent
+  - Date-based filtering and pagination support
+
+- **Keyword Filter Pipeline**
+  - Filter by keywords (AND logic)
+  - Filter by categories (OR logic)
+  - Exclude by keywords
+  - Filter by authors
+  - Filter by publication date
+  - Require PDF availability
+
+- **Export Adapters**
+  - **JSON Adapter**: Export to JSON with metadata
+  - **Zotero Adapter**: Export to Zotero library (optional dependency)
+
+### Planned Features
+
+- Gmail alert parsing (Google Scholar, journal TOCs)
+- AI-powered semantic filtering
+- Additional export adapters (BibTeX, CSV, Markdown)
 
 ## Installation
 
-### Local Development Install
+### Quick Install (Local Development)
 
 ```bash
-# Clone repository (if not already cloned)
-git clone <repository-url>
-cd paper-feed
+# Navigate to paper-feed directory
+cd external/paper-feed
 
 # Install in editable mode
 pip install -e .
@@ -24,50 +53,190 @@ pip install -e ".[gmail]"
 # Install with LLM-based filtering
 pip install -e ".[llm]"
 
-# Install with Zotero export
-pip install -e ".[zotero]"
+# Install with development tools
+pip install -e ".[dev]"
 
 # Install everything
 pip install -e ".[all]"
 ```
 
+**Note:** Zotero adapter is planned for Phase 2 and not yet available.
+
+### Prerequisites
+
+- Python 3.10 or higher
+- pip (Python package installer)
+
+For detailed installation instructions, troubleshooting, and verification steps, see [docs/INSTALLATION.md](docs/INSTALLATION.md).
+
 ## Quick Start
 
+Here's a complete workflow to fetch, filter, and export papers from arXiv:
+
 ```python
-from paper_feed import RSSSource, FilterPipeline, JSONAdapter
+import asyncio
+from paper_feed import RSSSource, FilterPipeline, JSONAdapter, FilterCriteria
 
-# Fetch from arXiv
-source = RSSSource("https://arxiv.org/rss/cs.AI")
-papers = await source.fetch_papers()
+async def main():
+    # Step 1: Fetch papers from arXiv
+    source = RSSSource("https://arxiv.org/rss/cs.AI")
+    papers = await source.fetch_papers(limit=50)
+    print(f"Fetched {len(papers)} papers")
 
-# Filter
-criteria = FilterCriteria(keywords=["machine learning"])
-filtered = await FilterPipeline().filter(papers, criteria)
+    # Step 2: Filter by keywords
+    criteria = FilterCriteria(
+        keywords=["machine learning", "deep learning"],
+        categories=["Computer Science"],
+    )
+    filtered = await FilterPipeline().filter(papers, criteria)
+    print(f"Filtered to {filtered.passed_count} papers")
 
-# Export
-await JSONAdapter().export(filtered.papers, "papers.json")
+    # Step 3: Export to JSON
+    await JSONAdapter().export(
+        filtered.papers,
+        "papers.json",
+        include_metadata=True
+    )
+    print("Exported to papers.json")
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
-## Features
+For more detailed tutorials and real-world examples, see [docs/QUICKSTART.md](docs/QUICKSTART.md).
 
-- RSS feed parsing (arXiv, bioRxiv, Nature, Science)
-- Gmail alert parsing (Google Scholar, journal TOCs)
-- Multi-stage filtering (keyword + AI semantic)
-- Flexible export adapters (Zotero, JSON, etc.)
+## Usage Examples
+
+### Example 1: Fetch from Multiple Sources
+
+```python
+from paper_feed import RSSSource
+
+# Fetch from arXiv
+arxiv_source = RSSSource("https://arxiv.org/rss/cs.AI")
+arxiv_papers = await arxiv_source.fetch_papers()
+
+# Fetch from bioRxiv
+biorxiv_source = RSSSource("https://www.biorxiv.org/content/early/recent")
+biorxiv_papers = await biorxiv_source.fetch_papers()
+
+# Combine
+all_papers = arxiv_papers + biorxiv_papers
+```
+
+### Example 2: Advanced Filtering
+
+```python
+from paper_feed import FilterCriteria, FilterPipeline
+from datetime import date
+
+# Complex filter criteria
+criteria = FilterCriteria(
+    keywords=["neural networks", "transformers"],
+    exclude_keywords=["review", "survey"],
+    authors=["Hinton", "LeCun", "Bengio"],
+    min_date=date(2023, 1, 1),
+    has_pdf=True,
+)
+
+result = await FilterPipeline().filter(papers, criteria)
+print(f"Found {result.passed_count} papers matching criteria")
+```
+
+### Example 3: Export with Custom Options
+
+```python
+from paper_feed import JSONAdapter
+
+# Export without metadata (cleaner output)
+await JSONAdapter().export(
+    papers,
+    "clean_papers.json",
+    include_metadata=False
+)
+
+# Export with metadata (includes source-specific fields)
+await JSONAdapter().export(
+    papers,
+    "full_papers.json",
+    include_metadata=True
+)
+```
+
+## Documentation
+
+- **[Installation Guide](docs/INSTALLATION.md)** - Detailed setup instructions
+- **[Quick Start Tutorial](docs/QUICKSTART.md)** - Complete workflow tutorial
+- **[Architecture Overview](docs/ARCHITECTURE.md)** - Module structure and design patterns
+- **[Adapter Documentation](docs/ADAPTERS.md)** - Export adapter details
+
+## Examples
+
+Check out the [examples/](examples/) directory for complete, runnable examples:
+
+- **[complete_workflow.py](examples/complete_workflow.py)** - End-to-end workflow
+- **[adapters_example.py](examples/adapters_example.py)** - Adapter usage examples
 
 ## Development
+
+### Running Tests
 
 ```bash
 # Install development dependencies
 pip install -e ".[dev]"
 
-# Run tests
+# Run all tests
 pytest
 
-# Run linter
-ruff check
+# Run with verbose output
+pytest -v
+
+# Run specific test file
+pytest tests/unit/test_models.py -v
 ```
+
+### Code Quality
+
+```bash
+# Lint code
+ruff check
+
+# Auto-fix issues
+ruff check --fix
+
+# Format code
+ruff format
+```
+
+## Project Structure
+
+```
+paper-feed/
+├── src/paper_feed/
+│   ├── core/           # Core models and base classes
+│   ├── sources/        # Data sources (RSS, Gmail)
+│   ├── filters/        # Filter pipeline and stages
+│   └── adapters/       # Export adapters (JSON, Zotero)
+├── tests/              # Unit tests
+├── docs/               # Documentation
+├── examples/           # Usage examples
+└── pyproject.toml      # Project configuration
+```
+
+For detailed architecture information, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Contributing
+
+Contributions are welcome! Please see the main project's CONTRIBUTING.md for guidelines.
 
 ## License
 
-MIT
+MIT License - see LICENSE file for details.
+
+## Roadmap
+
+- [ ] Phase 1: Core functionality (RSS, filters, JSON export) ✅
+- [ ] Phase 2: Zotero adapter implementation
+- [ ] Phase 3: Gmail source integration
+- [ ] Phase 4: AI-powered semantic filtering
+- [ ] Phase 5: Additional export adapters (BibTeX, CSV, Markdown)
