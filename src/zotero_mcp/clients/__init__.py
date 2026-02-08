@@ -1,7 +1,6 @@
 """External service clients organized by domain."""
 
 from .database import ChromaClient, create_chroma_client
-from .gmail import GmailClient
 from .llm import CLILLMClient, get_llm_client
 from .metadata import CrossrefClient, OpenAlexClient
 from .zotero import (
@@ -30,6 +29,4 @@ __all__ = [
     # LLM
     "get_llm_client",
     "CLILLMClient",
-    # Gmail
-    "GmailClient",
 ]

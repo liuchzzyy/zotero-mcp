@@ -9,12 +9,11 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
 # Global config singleton
-_config: Optional[Config] = None
+_config: Config | None = None
 
 
 class Config(BaseModel):
@@ -25,7 +24,7 @@ class Config(BaseModel):
     zotero_api_key: str = Field(default="")
     zotero_library_type: str = Field(default="user")
 
-    # LLM (for paper-analyzer)
+    # LLM (for PDF analysis)
     llm_provider: str = Field(default="deepseek")
     llm_api_key: str = Field(default="")
     llm_base_url: str = Field(default="")

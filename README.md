@@ -41,12 +41,6 @@
 - Image annotation support
 - Works alongside Zotero's native annotation system
 
-### 🌐 Automated Ingestion
-- **RSS Feed Integration**: Fetch and filter papers from RSS feeds with AI
-- **Gmail Integration**: Process Google Scholar alerts and email sources
-- **Smart Deduplication**: URL/DOI-based duplicate detection
-- **Daily Automation**: GitHub Actions for scheduled processing
-
 ### 🗑️ Duplicate Detection & Removal
 - **Smart deduplication** by DOI, title, or URL priority
 - **Cross-folder copy detection**: Identical items in multiple folders are preserved
@@ -132,12 +126,6 @@ zotero-mcp db-status                      # Check database status
 zotero-mcp db-inspect                     # Inspect indexed documents
 ```
 
-### Automated Ingestion
-```bash
-zotero-mcp rss fetch                       # Fetch RSS feeds
-zotero-mcp gmail process                   # Process Gmail alerts
-```
-
 ### Research Workflow
 ```bash
 zotero-mcp scan                            # Scan for unprocessed papers
@@ -171,7 +159,6 @@ zotero-mcp setup-info                      # Show installation info
 
 ### Collections & Tags
 - `zotero_get_collections` - List collections
-- `zotero_get_collection_items` - Items in a collection
 - `zotero_find_collection` - Find by name (fuzzy matching)
 - `zotero_get_tags` - List all tags
 
@@ -184,13 +171,8 @@ zotero-mcp setup-info                      # Show installation info
 ### Batch Workflow
 - `zotero_prepare_analysis` - Collect PDF content for review
 - `zotero_batch_analyze_pdfs` - AI-powered batch analysis
-- `zotero_analyze_pdf` - Multi-modal PDF analysis (image + text + OCR)
 - `zotero_resume_workflow` - Resume interrupted workflow
 - `zotero_list_workflows` - View workflow states
-
-### RSS & Gmail
-- `rss_fetch_feed` - Fetch single RSS feed
-- `rss_fetch_from_opml` - Fetch from OPML file
 
 ## 🔧 Configuration
 
@@ -237,13 +219,6 @@ ZOTERO_MCP_CLI_LLM_MAX_IMAGES=20           # Max images to extract
 ZOTERO_MCP_CLI_LLM_CHUNK_SIZE=2000         # Text chunk size
 ```
 
-**RSS/Gmail:**
-```bash
-RSS_PROMPT="Your research interests"
-ZOTERO_INBOX_COLLECTION=00_INBOXS
-GMAIL_TOKEN_JSON=path/to/token.json
-```
-
 ### Web API Setup
 
 For remote access without Zotero desktop:
@@ -260,22 +235,19 @@ Get your API key from https://www.zotero.org/settings/keys
 
 ### Pre-configured Workflows
 
-**Daily RSS Ingestion**
-- Fetches RSS feeds and filters with AI
-- Imports new papers to Zotero Inbox
-- Runs daily at 16:00 UTC
-
-**Daily Gmail Processing**
-- Processes Google Scholar alerts
-- Filters by research interests
-- Enhances metadata via APIs
-- Runs daily at 16:30 UTC
-
 **Daily Global Analysis**
 - Scans library for unprocessed papers
-- Analyzes with AI (DeepSeek)
+- Analyzes with AI (DeepSeek/CLI)
 - Creates structured notes
 - Runs daily at 17:00 UTC
+
+**Metadata Update**
+- Enriches bibliographic fields via Crossref/OpenAlex
+- Runs on schedule or manual trigger
+
+**Deduplication**
+- Finds and quarantines duplicates by DOI/title/URL
+- Runs on schedule or manual trigger
 
 **Manual Triggers**
 All workflows support on-demand execution with dry-run mode.
@@ -368,63 +340,39 @@ zotero-mcp setup
 ## 📚 Documentation
 
 - [CLAUDE.md](./CLAUDE.md) - Development guidelines for Claude Code
+- [中文指南](./中文指南.md) - 最新逻辑框架与函数说明
 - [CONTRIBUTING.md](./CONTRIBUTING.md) - Contribution guidelines
 - [Migration Guide](./docs/MIGRATION_GUIDE.md) - v2.x to v3.0 migration
+- [Prompt Guide](./docs/PROMPTS.md) - MCP Prompt reference (EN/中文)
 - [Multi-Modal Analysis Guide](./docs/MULTIMODAL_ANALYSIS.md) - Comprehensive multi-modal PDF analysis documentation
 - [GitHub Actions Guide](./docs/GITHUB_ACTIONS_GUIDE.md) - Workflow automation
-- [Gmail Setup](./docs/GMAIL-SETUP.md) - Gmail integration setup
 - [Batch Workflow Example](./examples/workflow_example.py) - Production-grade code example
 
-## 🏗️ Modular Architecture (v3.0)
+## 🏗️ Architecture Overview
 
-Starting with v3.0, Zotero MCP is organized as a modular system:
+Zotero MCP is now a single, cohesive package with a Logseq-inspired layering:
 
 ```
-zotero-mcp (MCP integration layer)
-├── zotero-core      → Zotero data access (CRUD, search, metadata)
-├── paper-analyzer   → PDF analysis engine (extraction, LLM)
-└── paper-feed       → Paper collection (RSS, Gmail) - optional
+src/zotero_mcp
+├── app.py       # FastMCP tool registry (shared by server/CLI)
+├── server.py    # MCP stdio server entrypoint
+├── cli.py       # CLI entrypoint
+├── clients/     # External APIs (Zotero, metadata, LLM, database)
+├── handlers/    # MCP tool/prompt handlers (logseq-mcp style)
+├── services/    # Core business logic (search, items, workflows)
+├── tools/       # MCP tool registrations (FastMCP)
+├── models/      # Pydantic schemas and responses
+├── settings.py  # Pydantic Settings (logseq-mcp aligned)
+└── utils/       # Shared helpers (config, logging, formatting)
 ```
 
-### Standalone Module Usage
-
-Each module can be used independently:
-
-```python
-# paper-feed: Collect papers from RSS
-from paper_feed import RSSSource, FilterPipeline, FilterCriteria
-source = RSSSource("https://arxiv.org/rss/cs.AI")
-papers = await source.fetch_papers(limit=20)
-
-# zotero-core: Access Zotero library
-from zotero_core import ItemService
-service = ItemService(library_id="...", api_key="...")
-items = await service.get_all_items(limit=10)
-
-# paper-analyzer: Analyze PDFs with LLM
-from paper_analyzer import PDFAnalyzer
-from paper_analyzer.clients import DeepSeekClient
-analyzer = PDFAnalyzer(llm_client=DeepSeekClient(api_key="..."))
-result = await analyzer.analyze("paper.pdf")
-```
-
-### Module Details
-
-| Module | Description | Install |
-|--------|-------------|---------|
-| [paper-feed](external/paper-feed/) | RSS/Gmail paper collection framework | `pip install paper-feed` |
-| [zotero-core](modules/zotero-core/) | Zotero API client with hybrid search (RRF) | `pip install zotero-core` |
-| [paper-analyzer](modules/paper-analyzer/) | Multi-modal PDF analysis with LLM | `pip install paper-analyzer` |
-| zotero-mcp | MCP integration layer (this package) | `pip install zotero-mcp` |
-
-For migration from v2.x, see [Migration Guide](docs/MIGRATION_GUIDE.md).
+The PDF analyzer and Zotero core logic are fully integrated into the main package to reduce duplication and keep a single source of truth.
 
 ## 📝 Changelog
 
 ### v3.0.0
-- 🏗️ Modular architecture: split into paper-feed, zotero-core, paper-analyzer
-- 🔌 New integration layer with unified config management
-- 📦 Each module independently installable and usable
+- 🏗️ Unified architecture with a single package and clear layering
+- 🔌 MCP tool refactor with consolidated configuration
 - 🔍 Hybrid search with Reciprocal Rank Fusion (RRF) algorithm
 - 📄 Multi-modal PDF analysis with template system
 
@@ -437,7 +385,6 @@ For migration from v2.x, see [Migration Guide](docs/MIGRATION_GUIDE.md).
 - ✅ Enhanced error handling and logging
 
 ### v2.3.0
-- Gmail integration with OAuth2
 - Enhanced metadata matching (lowered threshold to 0.6)
 - Improved timeout handling (45s default)
 - Cache error tolerance for GitHub Actions

@@ -6,8 +6,6 @@ Wraps integration modules as MCP tools for AI assistants.
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 from fastmcp import FastMCP
 
 from zotero_mcp.integration.analyzer_integration import AnalyzerIntegration
@@ -29,7 +27,7 @@ class MCPTools:
     def __init__(
         self,
         zotero: ZoteroIntegration,
-        analyzer: Optional[AnalyzerIntegration] = None,
+        analyzer: AnalyzerIntegration | None = None,
     ):
         self.zotero = zotero
         self.analyzer = analyzer
@@ -49,8 +47,8 @@ class MCPTools:
         @mcp.tool()
         async def get_items(
             limit: int = 25,
-            collection_key: Optional[str] = None,
-            tag: Optional[str] = None,
+            collection_key: str | None = None,
+            tag: str | None = None,
         ) -> str:
             """
             Get Zotero items list.
@@ -82,11 +80,11 @@ class MCPTools:
         async def create_item(
             item_type: str,
             title: str,
-            creators: Optional[List[str]] = None,
-            abstract: Optional[str] = None,
-            doi: Optional[str] = None,
-            url: Optional[str] = None,
-            collection_keys: Optional[List[str]] = None,
+            creators: list[str] | None = None,
+            abstract: str | None = None,
+            doi: str | None = None,
+            url: str | None = None,
+            collection_keys: list[str] | None = None,
         ) -> str:
             """
             Create a new Zotero item.
@@ -125,7 +123,7 @@ class MCPTools:
         @mcp.tool()
         async def create_collection(
             name: str,
-            parent_collection_key: Optional[str] = None,
+            parent_collection_key: str | None = None,
         ) -> str:
             """
             Create a Zotero collection.
