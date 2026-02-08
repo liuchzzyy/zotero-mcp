@@ -11,6 +11,7 @@ try:
 except PackageNotFoundError:
     __version__ = "unknown"
 
-from .server import mcp, run
+from .app import mcp
+from .server import run
 
 __all__ = ["__version__", "mcp", "run"]

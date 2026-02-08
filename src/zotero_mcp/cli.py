@@ -3,12 +3,13 @@ Command-line interface for Zotero MCP server.
 """
 
 import argparse
+import asyncio
 import json
 from pathlib import Path
 import shutil
 import sys
 
-from zotero_mcp.server import mcp
+from zotero_mcp.server import serve
 from zotero_mcp.utils.config import load_config
 from zotero_mcp.utils.config.logging import (
     initialize_logging,
@@ -80,24 +81,7 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
     # Server command
-    server_parser = subparsers.add_parser("serve", help="Run the MCP server")
-    server_parser.add_argument(
-        "--transport",
-        choices=["stdio", "streamable-http", "sse"],
-        default="stdio",
-        help="Transport to use (default: stdio)",
-    )
-    server_parser.add_argument(
-        "--host",
-        default="localhost",
-        help="Host to bind to for SSE transport (default: localhost)",
-    )
-    server_parser.add_argument(
-        "--port",
-        type=int,
-        default=8000,
-        help="Port to bind to for SSE transport (default: 8000)",
-    )
+    subparsers.add_parser("serve", help="Run the MCP server over stdio")
 
     # Setup command
     setup_parser = subparsers.add_parser("setup", help="Configure zotero-mcp")
@@ -185,86 +169,6 @@ def main():
         "--method",
         choices=["pip", "uv", "conda", "pipx"],
         help="Override installation method",
-    )
-
-    # RSS command
-    rss_parser = subparsers.add_parser("rss", help="RSS feed management")
-    rss_subparsers = rss_parser.add_subparsers(
-        dest="rss_command", help="RSS subcommand"
-    )
-
-    rss_fetch_parser = rss_subparsers.add_parser(
-        "fetch", help="Fetch and import RSS feeds"
-    )
-    rss_fetch_parser.add_argument(
-        "--opml", default="src/RSS/RSS_official.opml", help="Path to OPML file"
-    )
-    rss_fetch_parser.add_argument(
-        "--prompt",
-        help="Path to research interest prompt file (falls back to RSS_PROMPT env var)",
-    )
-    rss_fetch_parser.add_argument(
-        "--collection", default="00_INBOXS", help="Target Zotero collection name"
-    )
-    rss_fetch_parser.add_argument(
-        "--days", type=int, default=15, help="Import articles from the last N days"
-    )
-    rss_fetch_parser.add_argument("--max-items", type=int, help="Limit items to import")
-    rss_fetch_parser.add_argument(
-        "--dry-run", action="store_true", help="Preview items without importing"
-    )
-    rss_fetch_parser.add_argument(
-        "--llm-provider",
-        choices=["deepseek", "claude-cli"],
-        default="deepseek",
-        help="LLM provider for filtering (default: deepseek)",
-    )
-
-    # Gmail command
-    gmail_parser = subparsers.add_parser("gmail", help="Gmail email processing")
-    gmail_subparsers = gmail_parser.add_subparsers(
-        dest="gmail_command", help="Gmail subcommand"
-    )
-
-    gmail_process_parser = gmail_subparsers.add_parser(
-        "process", help="Process emails and import to Zotero"
-    )
-    gmail_process_parser.add_argument("--sender", help="Filter by sender email address")
-    gmail_process_parser.add_argument(
-        "--subject", help="Filter by subject (partial match)"
-    )
-    gmail_process_parser.add_argument(
-        "--query", help="Raw Gmail search query (overrides sender/subject)"
-    )
-    gmail_process_parser.add_argument(
-        "--collection", default="00_INBOXS", help="Target Zotero collection name"
-    )
-    gmail_process_parser.add_argument(
-        "--max-emails", type=int, default=50, help="Maximum emails to process"
-    )
-    gmail_process_parser.add_argument(
-        "--no-delete", action="store_true", help="Don't delete emails after processing"
-    )
-    gmail_process_parser.add_argument(
-        "--permanent-delete",
-        action="store_true",
-        help="Permanently delete (default: trash)",
-    )
-    gmail_process_parser.add_argument(
-        "--dry-run", action="store_true", help="Preview without importing or deleting"
-    )
-    gmail_process_parser.add_argument(
-        "--llm-provider",
-        choices=["deepseek", "claude-cli"],
-        default="deepseek",
-        help="LLM provider for filtering (default: deepseek)",
-    )
-
-    gmail_auth_parser = gmail_subparsers.add_parser(
-        "auth", help="Authenticate with Gmail"
-    )
-    gmail_auth_parser.add_argument(
-        "--credentials", help="Path to OAuth2 credentials.json from Google Cloud"
     )
 
     # Scan command (global analysis)
@@ -406,7 +310,6 @@ Examples:
 
     if not args.command:
         args.command = "serve"
-        args.transport = "stdio"
 
     if args.command == "version":
         from zotero_mcp import __version__
@@ -544,149 +447,6 @@ Examples:
         update_zotero_mcp(
             check_only=args.check_only, force=args.force, method=args.method
         )
-
-    elif args.command == "rss":
-        if args.rss_command == "fetch":
-            load_config()
-            import asyncio
-
-            from zotero_mcp.services.rss.rss_service import RSSService
-            from zotero_mcp.utils.config import get_rss_config
-
-            # Apply env var defaults for CLI args not explicitly provided
-            rss_config = get_rss_config()
-            if args.opml == "src/RSS/RSS_official.opml":
-                args.opml = rss_config.get("opml_path", "src/RSS/RSS_official.opml")
-                print(f"Using RSS_OPML_PATH: {args.opml}")
-            if args.collection == "00_INBOXS":
-                config_collection = rss_config.get("collection", "00_INBOXS")
-                if config_collection:
-                    args.collection = config_collection
-            if args.days == 15:
-                config_days = rss_config.get("days_back", 15)
-                if config_days != 15:
-                    args.days = config_days
-
-            service = RSSService()
-            try:
-                result = asyncio.run(
-                    service.process_rss_workflow(
-                        opml_path=args.opml,
-                        prompt_path=args.prompt,
-                        collection_name=args.collection,
-                        days_back=args.days,
-                        max_items=args.max_items,
-                        dry_run=args.dry_run,
-                        llm_provider=args.llm_provider,
-                    )
-                )
-
-                print("\n=== RSS Processing Results ===")
-                print(f"  Feeds fetched: {result.feeds_fetched}")
-                print(f"  Items found: {result.items_found}")
-                print(f"  Items after date filter: {result.items_after_date_filter}")
-                print(f"  Items after AI filter: {result.items_filtered}")
-                print(f"  Items imported: {result.items_imported}")
-                print(f"  Items duplicate: {result.items_duplicate}")
-
-                if result.errors:
-                    print(f"\nErrors ({len(result.errors)}):")
-                    for err in result.errors[:5]:
-                        print(f"  - {err}")
-
-            except Exception as e:
-                print(f"Error: {e}")
-                sys.exit(1)
-
-    elif args.command == "gmail":
-        if args.gmail_command == "auth":
-            from zotero_mcp.clients.gmail import DEFAULT_CREDENTIALS_PATH, GmailClient
-
-            credentials_path = args.credentials or DEFAULT_CREDENTIALS_PATH
-            print(f"Authenticating with Gmail using credentials: {credentials_path}")
-
-            try:
-                client = GmailClient(credentials_path=credentials_path)
-                # Force authentication by accessing service
-                _ = client.service
-                print("✓ Gmail authentication successful!")
-                print(f"  Token saved to: {client.token_path}")
-            except FileNotFoundError as e:
-                print(f"✗ {e}")
-                print("\nTo set up Gmail API:")
-                print("1. Go to Google Cloud Console")
-                print("2. Create OAuth2 credentials (Desktop app)")
-                print("3. Download credentials.json")
-                print(f"4. Place it at: {DEFAULT_CREDENTIALS_PATH}")
-                print("   Or specify with: --credentials /path/to/credentials.json")
-                sys.exit(1)
-            except Exception as e:
-                print(f"✗ Authentication failed: {e}")
-                sys.exit(1)
-
-        elif args.gmail_command == "process":
-            load_config()
-            import asyncio
-
-            from zotero_mcp.services.gmail.gmail_service import GmailService
-            from zotero_mcp.utils.config import get_gmail_config
-
-            # Apply env var defaults for CLI args not explicitly provided
-            gmail_config = get_gmail_config()
-            if not args.sender and gmail_config.get("sender_filter"):
-                args.sender = gmail_config["sender_filter"]
-                print(f"Using GMAIL_SENDER_FILTER: {args.sender}")
-            if not args.subject and gmail_config.get("subject_filter"):
-                args.subject = gmail_config["subject_filter"]
-                print(f"Using GMAIL_SUBJECT_FILTER: {args.subject}")
-            if not args.collection or args.collection == "00_INBOXS":
-                config_collection = gmail_config.get("collection", "00_INBOXS")
-                if config_collection:
-                    args.collection = config_collection
-
-            if not args.sender and not args.subject and not args.query:
-                args.query = "in:inbox is:unread"
-                print(
-                    "Warning: No --sender, --subject, or --query specified. "
-                    'Defaulting to --query "in:inbox is:unread"'
-                )
-
-            service = GmailService()
-            try:
-                result = asyncio.run(
-                    service.process_gmail_workflow(
-                        sender=args.sender,
-                        subject=args.subject,
-                        query=args.query,
-                        collection_name=args.collection,
-                        max_emails=args.max_emails,
-                        delete_after=not args.no_delete,
-                        trash_only=not args.permanent_delete,
-                        dry_run=args.dry_run,
-                        llm_provider=args.llm_provider,
-                    )
-                )
-
-                print("\n=== Gmail Processing Results ===")
-                print(f"  Emails found: {result.emails_found}")
-                print(f"  Emails processed: {result.emails_processed}")
-                print(f"  Items extracted: {result.items_extracted}")
-                print(f"  Items filtered (relevant): {result.items_filtered}")
-                print(f"  Items imported: {result.items_imported}")
-                print(f"  Items duplicate: {result.items_duplicate}")
-                print(f"  Emails deleted: {result.emails_deleted}")
-
-                if result.keywords_used:
-                    print(f"\nKeywords used: {', '.join(result.keywords_used)}")
-
-                if result.errors:
-                    print(f"\nErrors ({len(result.errors)}):")
-                    for err in result.errors[:5]:
-                        print(f"  - {err}")
-
-            except Exception as e:
-                print(f"Error: {e}")
-                sys.exit(1)
 
     elif args.command == "scan":
         load_config()
@@ -851,15 +611,7 @@ Examples:
 
     elif args.command == "serve":
         load_config()
-        if args.transport == "stdio":
-            mcp.run(transport="stdio")
-        elif args.transport == "streamable-http":
-            mcp.run(transport="streamable-http", host=args.host, port=args.port)
-        elif args.transport == "sse":
-            import warnings
-
-            warnings.warn("SSE deprecated", UserWarning, stacklevel=2)
-            mcp.run(transport="sse", host=args.host, port=args.port)
+        asyncio.run(serve())
 
 
 if __name__ == "__main__":

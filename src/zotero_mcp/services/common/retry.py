@@ -1,73 +1,40 @@
-"""Generic retry utility with exponential backoff."""
+"""Retry helper with exponential backoff."""
+
+from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-import logging
 from typing import TypeVar
 
 T = TypeVar("T")
-
-logger = logging.getLogger(__name__)
 
 
 async def async_retry_with_backoff(
     func: Callable[[], Awaitable[T]],
     *,
-    max_retries: int = 3,
-    base_delay: float = 2.0,
-    description: str = "Operation",
+    retries: int = 3,
+    base_delay: float = 1.0,
+    max_delay: float = 10.0,
+    description: str | None = None,
 ) -> T:
-    """
-    Execute an async function with retry and exponential backoff.
+    """Retry an async callable with exponential backoff.
 
     Args:
-        func: Async function to execute
-        max_retries: Maximum number of retry attempts
-        base_delay: Base delay in seconds (will be doubled each retry)
-        description: Description for logging
-
-    Returns:
-        Result from func
-
-    Raises:
-        Last exception if all retries fail
+        func: Zero-arg async callable to invoke.
+        retries: Number of retries before raising.
+        base_delay: Initial delay in seconds.
+        max_delay: Maximum delay between retries.
     """
-    last_exception = None
-
-    for attempt in range(max_retries):
+    _ = description
+    last_error: Exception | None = None
+    for attempt in range(retries + 1):
         try:
             return await func()
-        except Exception as e:
-            last_exception = e
-            error_msg = str(e).lower()
-
-            # Check if error is retryable
-            is_retryable = any(
-                keyword in error_msg
-                for keyword in [
-                    "timed out",
-                    "timeout",
-                    "503",
-                    "502",
-                    "504",
-                    "429",  # Rate limit
-                    "connection",
-                    "temporary",
-                    "reset",  # Connection reset
-                ]
-            )
-
-            if not is_retryable or attempt == max_retries - 1:
-                raise
-
-            delay = base_delay * (2**attempt)
-            logger.warning(
-                f"  ↻ {description} failed (attempt {attempt + 1}/{max_retries}): "
-                f"{e}. Retrying in {delay:.0f}s..."
-            )
+        except Exception as exc:  # pragma: no cover - exercised by callers
+            last_error = exc
+            if attempt >= retries:
+                break
+            delay = min(max_delay, base_delay * (2**attempt))
             await asyncio.sleep(delay)
-
-    # Should never reach here, but satisfies type checker
-    if last_exception:
-        raise last_exception
-    raise RuntimeError(f"{description} failed after {max_retries} retries")
+    assert last_error is not None
+    raise last_error

@@ -1,6 +1,5 @@
 """Tests for zotero-mcp config module."""
 
-import pytest
 
 from zotero_mcp.config import Config, get_config, reset_config
 

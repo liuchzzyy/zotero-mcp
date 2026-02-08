@@ -1,24 +1,22 @@
 """
-Paper Analyzer module integration.
+Paper Analyzer integration.
 
-Wraps paper-analyzer for use in the MCP integration layer.
+Wraps internal analyzer for use in the MCP integration layer.
 """
 
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from zotero_mcp.config import Config
 
 
 class AnalyzerIntegration:
-    """Bridges paper-analyzer module into zotero-mcp."""
+    """Bridges analyzer module into zotero-mcp."""
 
     def __init__(self, config: Config):
-        from paper_analyzer import PDFAnalyzer, PDFExtractor
-        from paper_analyzer.templates import TemplateManager
+        from zotero_mcp.analyzer import PDFAnalyzer, PDFExtractor
+        from zotero_mcp.analyzer.templates import TemplateManager
 
         # Build LLM client based on provider
         llm_client = self._create_llm_client(config)
@@ -33,7 +31,7 @@ class AnalyzerIntegration:
     def _create_llm_client(config: Config):
         """Create the appropriate LLM client."""
         if config.llm_provider == "openai":
-            from paper_analyzer.clients import OpenAIClient
+            from zotero_mcp.analyzer.clients import OpenAIClient
 
             return OpenAIClient(
                 api_key=config.llm_api_key,
@@ -41,7 +39,7 @@ class AnalyzerIntegration:
                 model=config.llm_model,
             )
         else:
-            from paper_analyzer.clients import DeepSeekClient
+            from zotero_mcp.analyzer.clients import DeepSeekClient
 
             return DeepSeekClient(
                 api_key=config.llm_api_key,
@@ -53,7 +51,7 @@ class AnalyzerIntegration:
         file_path: str,
         template_name: str = "default",
         extract_images: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Analyze a PDF file directly."""
         result = await self.analyzer.analyze(
             file_path=file_path,
@@ -76,7 +74,7 @@ class AnalyzerIntegration:
         text: str,
         title: str = "Untitled",
         template_name: str = "default",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Analyze pre-extracted text."""
         result = await self.analyzer.analyze_text(
             text=text,
@@ -95,7 +93,7 @@ class AnalyzerIntegration:
         }
 
     @staticmethod
-    def format_result(result: Dict[str, Any]) -> str:
+    def format_result(result: dict[str, Any]) -> str:
         """Format analysis result as Markdown."""
         lines = [
             "## Analysis Result\n",
@@ -128,7 +126,7 @@ class AnalyzerIntegration:
         return "\n".join(lines)
 
     @staticmethod
-    def format_batch_results(results: List[Dict[str, Any]]) -> str:
+    def format_batch_results(results: list[dict[str, Any]]) -> str:
         """Format batch analysis results."""
         lines = [f"## Batch Analysis: {len(results)} papers\n"]
         for i, r in enumerate(results, 1):

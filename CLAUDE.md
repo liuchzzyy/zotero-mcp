@@ -12,9 +12,9 @@ Example:
 
 ## Project Overview
 
-Zotero MCP is a Model Context Protocol (MCP) server that connects AI assistants to Zotero research libraries. It provides semantic search (ChromaDB), PDF analysis via LLMs (DeepSeek/OpenAI/Gemini), annotation extraction, RSS feed ingestion, Gmail-based paper collection, and comprehensive logging.
+Zotero MCP is a Model Context Protocol (MCP) server that connects AI assistants to Zotero research libraries. It provides semantic search (ChromaDB), PDF analysis via LLMs (DeepSeek/OpenAI/Gemini), annotation extraction, and comprehensive logging.
 
-**Tech Stack:** FastMCP, Python 3.10+, uv (package manager)
+**Tech Stack:** MCP SDK + FastMCP, Python 3.10+, uv (package manager)
 
 ## Key Commands
 
@@ -29,9 +29,6 @@ uv run zotero-mcp update-db         # Update semantic search database (fast, met
 uv run zotero-mcp update-db --fulltext  # Update with full-text extraction
 uv run zotero-mcp db-status         # Check database status
 
-# RSS & Gmail
-uv run zotero-mcp rss fetch         # Fetch RSS feeds
-uv run zotero-mcp gmail process     # Process Gmail alerts
 uv run zotero-mcp scan              # Scan library for unprocessed papers
 
 # Multi-Modal Analysis
@@ -116,8 +113,10 @@ uv run zotero-mcp deduplicate --scan-limit 100 --treated-limit 1
 Layered architecture with strict separation of concerns, organized by domain:
 
 ### Entry Layer
-- `server.py` - FastMCP server initialization
+- `server.py` - MCP stdio server entrypoint (logseq-mcp aligned)
+- `app.py` - FastMCP tool registry (shared by server/CLI)
 - `cli.py` - Command-line interface
+- `settings.py` - Pydantic Settings (env config)
 
 ### Tools Layer (`tools/`)
 Thin MCP tool wrappers (`@mcp.tool`) that delegate to Services:
@@ -126,7 +125,6 @@ Thin MCP tool wrappers (`@mcp.tool`) that delegate to Services:
 - `collections.py` - Collection management tools
 - `database.py` - Semantic search database tools
 - `items.py` - Item CRUD tools
-- `rss.py` - RSS feed tools
 - `search.py` - Search tools (keyword, tag, advanced, semantic)
 - `workflow.py` - Batch analysis workflow tools
 
@@ -139,20 +137,8 @@ Business logic organized by domain:
   - `MetadataService` - DOI lookup via Crossref/OpenAlex
   - `SearchService` - Search and semantic search
   - `SemanticSearch` - ChromaDB vector search
-- `rss/` - RSS feed processing
-  - `RSSFetcher` - Fetch and parse RSS feeds
-  - `RSSService` - Orchestrate fetch → filter → import pipeline
-- `gmail/` - Gmail email processing
-  - `GmailFetcher` - Fetch emails and parse HTML
-  - `GmailService` - Orchestrate fetch → filter → import → delete pipeline
 - `workflow.py` - Batch analysis with checkpoint/resume
 - `data_access.py` - Central facade for backends (Local DB / Zotero API)
-
-**Common Services:**
-- `common/ai_filter.py` - AI-powered keyword filtering
-- `common/collection_scanner.py` - Shared collection scanning utilities for batch operations
-- `common/zotero_item_creator.py` - Unified item creation logic
-- `common/retry.py` - Retry with exponential backoff
 
 ### Clients Layer (`clients/`)
 External service clients organized by domain:
@@ -160,7 +146,6 @@ External service clients organized by domain:
 - `database/` - ChromaDB vector database
 - `metadata/` - Crossref, OpenAlex APIs
 - `llm/` - LLM providers (DeepSeek, OpenAI, Gemini, Claude CLI)
-- `gmail/` - Gmail API
 
 ### Models Layer (`models/`)
 Pydantic models organized by domain:
@@ -168,7 +153,6 @@ Pydantic models organized by domain:
 - `zotero/` - Item/collection/annotation input models
 - `workflow/` - Batch operation and analysis models
 - `search/` - Search query models
-- `ingestion/` - RSS/Gmail ingestion models
 - `database/` - Semantic search models
 
 ### Utils Layer (`utils/`)
@@ -214,12 +198,7 @@ When working with this codebase, follow these guidelines to maintain code simpli
 
 1. **Keep functions focused**: Single responsibility per function. If a function exceeds 50-100 lines, consider breaking it down.
 
-2. **Use shared utilities**: Leverage common utilities in `services/common/`:
-   - `collection_scanner.py` - For batch collection scanning patterns
-   - `retry.py` - For retry logic with exponential backoff
-   - `zotero_item_creator.py` - For unified item creation
-
-3. **Avoid duplication**: Before writing new code, check if similar patterns exist. Examples:
+2. **Avoid duplication**: Before writing new code, check if similar patterns exist. Examples:
    - Collection scanning with pagination: Use `scan_collections()`
    - Item conversion: Consolidate duplicate mapping logic
    - Error handling: Use consistent patterns across services
@@ -325,9 +304,7 @@ Multi-modal analysis is controlled by:
 - **Zotero API 429 rate limiting (pyzotero)**: pyzotero (v1.8.0) silently swallows HTTP 429 errors — it sets an internal backoff but does NOT raise an exception, returning malformed data instead. This causes `'int' object has no attribute 'get'` crashes in downstream code. The fix is:
   1. **API client layer** (`clients/zotero/api_client.py`): `_check_api_result()` converts int status codes to `RuntimeError` so retry mechanisms can detect "429" and backoff
   2. **Service layer** (`services/zotero/search_service.py`): defensive `isinstance(items, int)` checks return empty results
-  3. **Caller layer** (`services/common/zotero_item_creator.py`): `_safe_search()` wraps all search calls with try/except, catching any pyzotero edge cases and waiting 5s after 429 errors
-  4. **Rate limit spacing**: RSS/Gmail ingestion adds 1s delay between items (`asyncio.sleep(1.0)`) to stay under Zotero's ~10 req/s limit
-  - If RSS ingestion still hits 429, increase the delay or reduce `max_items`
+  3. **Caller layer**: wrap search calls with try/except and retry on 429 as needed
 
 ## Additional Documentation
 
@@ -335,4 +312,3 @@ Multi-modal analysis is controlled by:
 - `CONTRIBUTING.md` - Contribution guidelines (Conventional Commits, PR workflow)
 - `.env.example` - Configuration template with detailed comments
 - `docs/GITHUB_ACTIONS_GUIDE.md` - Workflow automation guide
-- `docs/GMAIL-SETUP.md` - Gmail OAuth2 setup

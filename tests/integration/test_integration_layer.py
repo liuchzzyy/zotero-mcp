@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from zotero_mcp.integration.analyzer_integration import AnalyzerIntegration
 from zotero_mcp.integration.zotero_integration import ZoteroIntegration
 

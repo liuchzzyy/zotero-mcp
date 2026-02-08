@@ -227,19 +227,19 @@ def setup_task_logger(
     level: int | None = None,
 ) -> logging.Logger:
     """
-    Setup logging for a background task (RSS, Gmail, Workflow).
+    Setup logging for a background task (e.g. analysis workflows).
 
     Adds task-specific context and automatic cleanup.
 
     Args:
-        task_name: Name of the task (e.g., "RSS Ingestion", "Global Analysis")
+        task_name: Name of the task (e.g., "Global Analysis")
         level: Log level (defaults to get_log_level())
 
     Returns:
         Configured logger with task context
 
     Example:
-        >>> logger = setup_task_logger("RSS Ingestion")
+        >>> logger = setup_task_logger("Global Analysis")
         >>> logger.info("Starting task")
     """
     logger = setup_logging(f"zotero_mcp.tasks.{task_name}", level=level)

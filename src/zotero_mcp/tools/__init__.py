@@ -11,7 +11,6 @@ from .batch import register_batch_tools
 from .collections import register_collection_tools
 from .database import register_database_tools
 from .items import register_item_tools
-from .rss import register_rss_tools
 from .search import register_search_tools
 from .workflow import register_workflow_tools
 
@@ -30,7 +29,6 @@ def register_all_tools(mcp: FastMCP) -> None:
     register_database_tools(mcp)
     register_batch_tools(mcp)
     register_workflow_tools(mcp)
-    register_rss_tools(mcp)
 
 
 __all__ = [
@@ -42,5 +40,4 @@ __all__ = [
     "register_database_tools",
     "register_batch_tools",
     "register_workflow_tools",
-    "register_rss_tools",
 ]

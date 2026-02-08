@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🔥 Removed
+- External `paper-feed` module; merged analysis and core logic into main package
+
+### 🔧 Changed
+- Unified package layout to align with logseq-mcp style layering
+
 ## [2.5.0] - 2026-02-02
 
 ### 🚀 Enhancements
@@ -37,7 +43,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🐛 Fixed
 
 #### GitHub Actions Workflows
-- **Gmail Sender Filter**: Fixed workflow to properly use `GMAIL_SENDER_FILTER` environment variable as fallback when manual input is not provided
 - **Deduplicate Log Formatting**:
   - Enhanced logs with emoji indicators (🔍, 📊, ✓, ⊘, ✅, 🗑️, ➕, ✗)
   - Distinguished ITEM vs NOTE types in output
@@ -63,7 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Capability Tests**: LLM capability detection and validation
 - **Template Tests**: Multi-modal template formatting tests
 - **CLI Tests**: Command-line interface tests for new flags
-- **GitHub Actions**: All workflows tested successfully (scan, metadata, deduplicate, gmail, rss)
+- **GitHub Actions**: All workflows tested successfully (scan, metadata, deduplicate)
 
 ## [2.4.0] - 2026-02-01
 
@@ -132,15 +137,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🚀 Enhancements
 
-#### Gmail Integration
-- **OAuth2 Authentication**: Secure Gmail API integration with OAuth2
-- **Google Scholar Alerts**: Automated processing of Scholar alert emails
-- **AI-Powered Filtering**: Filter papers by research interests using LLM
-- **Metadata Enrichment**: Auto-complete metadata via Crossref/OpenAlex APIs
-- **Smart Author Handling**: Automatically truncates long author lists to avoid HTTP 413 errors
-- **Correct Execution Order**: Papers imported to Zotero before emails are deleted
-- **Daily Automation**: GitHub Actions scheduled processing
-
 #### Error Handling
 - **Enhanced Metadata Matching**: Lowered threshold from 0.7 to 0.6 for better paper matching
 - **Increased API Timeout**: Raised from 30s to 45s for slow network conditions
@@ -149,36 +145,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔧 Changed
 
-- **Gmail Workflow**: Corrected execution order to ensure papers are imported before email deletion
 - **Retry Mechanisms**: All API calls use exponential backoff for transient failures
-- **GitHub Actions**: Improved error handling and logging
 
 ## [2.2.0] - 2026-01-20
-
-### 🚀 Enhancements
-
-#### RSS Feed Integration
-- **Automated RSS Fetching**: New `fetch-rss` GitHub Actions job scheduled daily
-- **OPML Support**: Ability to import feeds from OPML files
-- **Auto-Import**: Automatically imports new articles (last 7 days) to Zotero Inbox
-- **Deduplication**: Prevents duplicate imports based on article URL
-- **AI Filtering**: Use AI to filter articles by research interests
-
-#### New Tools
-- `rss_fetch_feed`: Fetch and parse a single RSS feed
-- `rss_fetch_from_opml`: Fetch multiple feeds from an OPML file
 
 ### 🔧 Changed
 
 - **Project Structure**: Moved automation scripts to `src/scripts/`
-- **Workflow Schedule**: Updated automated workflow to include RSS fetching
 - **Dependencies**: Added `feedparser`, `beautifulsoup4`, `lxml`, and `tenacity`
 
 ### 🗑️ Removed
 
 - Unused `streaming.py` utility module
 - Unused `response_converter.py` utility module
-- Duplicate `simple_gmail_auth.py` script
 
 ## [2.1.0] - 2026-01-15
 

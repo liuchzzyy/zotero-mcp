@@ -1,35 +1,56 @@
-"""
-Zotero MCP Server.
+"""MCP Server entry point with logseq-aligned architecture."""
 
-A Model Context Protocol server for Zotero, enabling AI assistants to access
-your research library, search for papers, and manage annotations.
-"""
+from __future__ import annotations
 
-from fastmcp import FastMCP
+import asyncio
+from collections.abc import Sequence
 
-from zotero_mcp.tools import register_all_tools
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+from mcp.types import ContentBlock, Prompt, Tool
+
+from zotero_mcp.app import get_fastmcp_app
+from zotero_mcp.handlers import PromptHandler, ToolHandler
+from zotero_mcp.settings import settings
 from zotero_mcp.utils.config import load_config
 from zotero_mcp.utils.config.logging import initialize_logging
 
-# Initialize FastMCP server
-mcp = FastMCP(
-    name="Zotero",
-    # description param removed for compatibility
-)
 
-# Initialize logging
-initialize_logging()
+async def serve() -> None:
+    """Run the Zotero MCP server."""
+    initialize_logging()
+    load_config()
 
-# Load configuration
-load_config()
+    server = Server(settings.server_name)
+    app = get_fastmcp_app()
 
-# Register all tools
-register_all_tools(mcp)
+    tool_handler = ToolHandler(app=app)
+    prompt_handler = PromptHandler()
+
+    @server.list_tools()
+    async def list_tools() -> list[Tool]:
+        return await tool_handler.get_tools()
+
+    @server.call_tool()
+    async def call_tool(name: str, arguments: dict) -> Sequence[ContentBlock]:
+        return await tool_handler.handle_tool(name, arguments)
+
+    @server.list_prompts()
+    async def list_prompts() -> list[Prompt]:
+        return prompt_handler.get_prompts()
+
+    @server.get_prompt()
+    async def get_prompt(name: str, arguments: dict | None):
+        return await prompt_handler.handle_prompt(name, arguments)
+
+    options = server.create_initialization_options()
+    async with stdio_server() as (read_stream, write_stream):
+        await server.run(read_stream, write_stream, options, raise_exceptions=True)
 
 
 def run() -> None:
     """Run the Zotero MCP server."""
-    mcp.run()
+    asyncio.run(serve())
 
 
 if __name__ == "__main__":

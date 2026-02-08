@@ -20,12 +20,8 @@ def clear_test_env():
     _clear_cache()
     # Clear all relevant prefixes
     prefixes = [
-        "RSS_",
         "ZOTERO_",
-        "OPENAI_",
-        "GEMINI_",
         "DEEPSEEK_",
-        "GMAIL_",
         "ENV_MODE",
     ]
     to_delete = [

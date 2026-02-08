@@ -291,6 +291,10 @@ class ItemService:
         """Create new items."""
         return await self.api_client.create_items(items)
 
+    async def create_item(self, item: dict[str, Any]) -> dict[str, Any]:
+        """Create a single item."""
+        return await self.api_client.create_items([item])
+
     async def get_item_bundle(
         self,
         item_key: str,
