@@ -274,7 +274,7 @@ class LLMClient:
                 )
                 return result
 
-            except asyncio.TimeoutError as e:
+            except TimeoutError as e:
                 last_exception = e
                 logger.warning(
                     f"API call timeout (attempt {attempt + 1}/{MAX_RETRIES}): {e}"

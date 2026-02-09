@@ -4,12 +4,9 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import TypeVar
-
-T = TypeVar("T")
 
 
-async def async_retry_with_backoff(
+async def async_retry_with_backoff[T](
     func: Callable[[], Awaitable[T]],
     *,
     retries: int = 3,

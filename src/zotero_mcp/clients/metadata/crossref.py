@@ -8,7 +8,8 @@ API Docs: https://api.crossref.org/swagger-ui/index.html
 """
 
 from dataclasses import dataclass
-from importlib.metadata import PackageNotFoundError, version as _pkg_version
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 import logging
 import re
 from typing import Any
@@ -25,6 +26,7 @@ CROSSREF_API_BASE = "https://api.crossref.org"
 
 # Request timeout in seconds (increased to handle slow network conditions)
 REQUEST_TIMEOUT = 45.0
+
 
 # User-Agent for polite pool (faster rate limits)
 # See: https://github.com/CrossRef/rest-api-doc#good-manners--more-reliable-service

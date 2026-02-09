@@ -335,7 +335,7 @@ class CLILLMClient:
                 await asyncio.wait_for(read_stream(), timeout=self.timeout)
                 # Wait for process to finish
                 await asyncio.wait_for(process.wait(), timeout=30)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 process.kill()
                 await process.wait()
                 partial = "".join(output_lines)

@@ -8,7 +8,8 @@ API Docs: https://docs.openalex.org/
 """
 
 from dataclasses import dataclass
-from importlib.metadata import PackageNotFoundError, version as _pkg_version
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 import logging
 import re
 from typing import Any
@@ -25,6 +26,7 @@ OPENALEX_API_BASE = "https://api.openalex.org"
 
 # Request timeout in seconds (increased to handle slow network conditions)
 REQUEST_TIMEOUT = 45.0
+
 
 # User-Agent for polite pool
 def _get_user_agent() -> str:

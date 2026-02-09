@@ -19,7 +19,8 @@ __all__ = [
 ]
 
 try:
-    from importlib.metadata import PackageNotFoundError, version as _pkg_version
+    from importlib.metadata import PackageNotFoundError
+    from importlib.metadata import version as _pkg_version
 
     __version__ = _pkg_version("zotero-mcp")
 except PackageNotFoundError:

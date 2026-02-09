@@ -81,15 +81,23 @@ class PromptHandler:
                     name="zotero_search",
                     description="Search Zotero items by keyword",
                     arguments=[
-                        PromptArgument("query", "Search keywords", True),
-                        PromptArgument("limit", "Maximum results (default: 20)", False),
                         PromptArgument(
-                            "offset", "Pagination offset (default: 0)", False
+                            name="query", description="Search keywords", required=True
                         ),
                         PromptArgument(
-                            "qmode",
-                            "Search mode: titleCreatorYear | everything",
-                            False,
+                            name="limit",
+                            description="Maximum results (default: 20)",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="offset",
+                            description="Pagination offset (default: 0)",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="qmode",
+                            description="Search mode: titleCreatorYear | everything",
+                            required=False,
                         ),
                     ],
                 ),
@@ -97,34 +105,68 @@ class PromptHandler:
                     name="zotero_search_by_tag",
                     description="Search Zotero items by tag",
                     arguments=[
-                        PromptArgument("tags", "Tag list (use -tag to exclude)", True),
-                        PromptArgument("limit", "Maximum results (default: 20)", False),
+                        PromptArgument(
+                            name="tags",
+                            description="Tag list (use -tag to exclude)",
+                            required=True,
+                        ),
+                        PromptArgument(
+                            name="limit",
+                            description="Maximum results (default: 20)",
+                            required=False,
+                        ),
                     ],
                 ),
                 Prompt(
                     name="zotero_advanced_search",
                     description="Advanced multi-field search",
                     arguments=[
-                        PromptArgument("conditions", "Search conditions list", True),
-                        PromptArgument("join_mode", "all | any", False),
-                        PromptArgument("limit", "Maximum results", False),
-                        PromptArgument("offset", "Pagination offset", False),
+                        PromptArgument(
+                            name="conditions",
+                            description="Search conditions list",
+                            required=True,
+                        ),
+                        PromptArgument(
+                            name="join_mode", description="all | any", required=False
+                        ),
+                        PromptArgument(
+                            name="limit", description="Maximum results", required=False
+                        ),
+                        PromptArgument(
+                            name="offset",
+                            description="Pagination offset",
+                            required=False,
+                        ),
                     ],
                 ),
                 Prompt(
                     name="zotero_semantic_search",
                     description="AI semantic similarity search",
                     arguments=[
-                        PromptArgument("query", "Natural language query", True),
-                        PromptArgument("limit", "Maximum results (default: 10)", False),
+                        PromptArgument(
+                            name="query",
+                            description="Natural language query",
+                            required=True,
+                        ),
+                        PromptArgument(
+                            name="limit",
+                            description="Maximum results (default: 10)",
+                            required=False,
+                        ),
                     ],
                 ),
                 Prompt(
                     name="zotero_get_recent",
                     description="Get recently added items",
                     arguments=[
-                        PromptArgument("days", "Look back window in days", False),
-                        PromptArgument("limit", "Maximum results", False),
+                        PromptArgument(
+                            name="days",
+                            description="Look back window in days",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="limit", description="Maximum results", required=False
+                        ),
                     ],
                 ),
             ]
@@ -137,24 +179,36 @@ class PromptHandler:
                     name="zotero_get_metadata",
                     description="Get item metadata",
                     arguments=[
-                        PromptArgument("item_key", "Zotero item key", True),
                         PromptArgument(
-                            "include_abstract",
-                            "Include abstract (default: true)",
-                            False,
+                            name="item_key",
+                            description="Zotero item key",
+                            required=True,
                         ),
-                        PromptArgument("output_format", "markdown | json", False),
+                        PromptArgument(
+                            name="include_abstract",
+                            description="Include abstract (default: true)",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="output_format",
+                            description="markdown | json",
+                            required=False,
+                        ),
                     ],
                 ),
                 Prompt(
                     name="zotero_get_fulltext",
                     description="Get full text content",
                     arguments=[
-                        PromptArgument("item_key", "Zotero item key", True),
                         PromptArgument(
-                            "max_length",
-                            "Maximum characters to return",
-                            False,
+                            name="item_key",
+                            description="Zotero item key",
+                            required=True,
+                        ),
+                        PromptArgument(
+                            name="max_length",
+                            description="Maximum characters to return",
+                            required=False,
                         ),
                     ],
                 ),
@@ -162,8 +216,16 @@ class PromptHandler:
                     name="zotero_get_children",
                     description="Get attachments/notes for an item",
                     arguments=[
-                        PromptArgument("item_key", "Parent item key", True),
-                        PromptArgument("child_type", "all | attachment | note", False),
+                        PromptArgument(
+                            name="item_key",
+                            description="Parent item key",
+                            required=True,
+                        ),
+                        PromptArgument(
+                            name="child_type",
+                            description="all | attachment | note",
+                            required=False,
+                        ),
                     ],
                 ),
                 Prompt(
@@ -171,28 +233,40 @@ class PromptHandler:
                     description="List collections or items in a collection",
                     arguments=[
                         PromptArgument(
-                            "collection_key",
-                            "Collection key (omit to list all)",
-                            False,
+                            name="collection_key",
+                            description="Collection key (omit to list all)",
+                            required=False,
                         ),
-                        PromptArgument("limit", "Maximum items when listing", False),
+                        PromptArgument(
+                            name="limit",
+                            description="Maximum items when listing",
+                            required=False,
+                        ),
                     ],
                 ),
                 Prompt(
                     name="zotero_get_bundle",
                     description="Get comprehensive item bundle",
                     arguments=[
-                        PromptArgument("item_key", "Zotero item key", True),
                         PromptArgument(
-                            "include_fulltext", "Include full text (true/false)", False
+                            name="item_key",
+                            description="Zotero item key",
+                            required=True,
                         ),
                         PromptArgument(
-                            "include_annotations",
-                            "Include PDF annotations (true/false)",
-                            False,
+                            name="include_fulltext",
+                            description="Include full text (true/false)",
+                            required=False,
                         ),
                         PromptArgument(
-                            "include_notes", "Include notes (true/false)", False
+                            name="include_annotations",
+                            description="Include PDF annotations (true/false)",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="include_notes",
+                            description="Include notes (true/false)",
+                            required=False,
                         ),
                     ],
                 ),
@@ -206,61 +280,101 @@ class PromptHandler:
                     name="zotero_get_annotations",
                     description="Get PDF annotations for an item",
                     arguments=[
-                        PromptArgument("item_key", "Zotero item key", True),
                         PromptArgument(
-                            "annotation_type",
-                            "all | highlight | note | underline | image",
-                            False,
+                            name="item_key",
+                            description="Zotero item key",
+                            required=True,
                         ),
                         PromptArgument(
-                            "use_pdf_extraction",
-                            "Fallback to PDF extraction (true/false)",
-                            False,
+                            name="annotation_type",
+                            description="all | highlight | note | underline | image",
+                            required=False,
                         ),
-                        PromptArgument("offset", "Pagination offset", False),
-                        PromptArgument("limit", "Maximum results", False),
+                        PromptArgument(
+                            name="use_pdf_extraction",
+                            description="Fallback to PDF extraction (true/false)",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="offset",
+                            description="Pagination offset",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="limit", description="Maximum results", required=False
+                        ),
                     ],
                 ),
                 Prompt(
                     name="zotero_get_notes",
                     description="Get notes for an item",
                     arguments=[
-                        PromptArgument("item_key", "Zotero item key", True),
                         PromptArgument(
-                            "include_standalone",
-                            "Include standalone notes (true/false)",
-                            False,
+                            name="item_key",
+                            description="Zotero item key",
+                            required=True,
                         ),
-                        PromptArgument("offset", "Pagination offset", False),
-                        PromptArgument("limit", "Maximum results", False),
+                        PromptArgument(
+                            name="include_standalone",
+                            description="Include standalone notes (true/false)",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="offset",
+                            description="Pagination offset",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="limit", description="Maximum results", required=False
+                        ),
                     ],
                 ),
                 Prompt(
                     name="zotero_search_notes",
                     description="Search notes and annotations",
                     arguments=[
-                        PromptArgument("query", "Search query", True),
                         PromptArgument(
-                            "include_annotations",
-                            "Include annotations in search (true/false)",
-                            False,
+                            name="query", description="Search query", required=True
                         ),
                         PromptArgument(
-                            "case_sensitive",
-                            "Case sensitive search (true/false)",
-                            False,
+                            name="include_annotations",
+                            description="Include annotations in search (true/false)",
+                            required=False,
                         ),
-                        PromptArgument("offset", "Pagination offset", False),
-                        PromptArgument("limit", "Maximum results", False),
+                        PromptArgument(
+                            name="case_sensitive",
+                            description="Case sensitive search (true/false)",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="offset",
+                            description="Pagination offset",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="limit", description="Maximum results", required=False
+                        ),
                     ],
                 ),
                 Prompt(
                     name="zotero_create_note",
                     description="Create a note attached to an item",
                     arguments=[
-                        PromptArgument("item_key", "Parent item key", True),
-                        PromptArgument("content", "Note content (text or HTML)", True),
-                        PromptArgument("tags", "Optional tags list", False),
+                        PromptArgument(
+                            name="item_key",
+                            description="Parent item key",
+                            required=True,
+                        ),
+                        PromptArgument(
+                            name="content",
+                            description="Note content (text or HTML)",
+                            required=True,
+                        ),
+                        PromptArgument(
+                            name="tags",
+                            description="Optional tags list",
+                            required=False,
+                        ),
                     ],
                 ),
             ]
@@ -273,26 +387,40 @@ class PromptHandler:
                     name="zotero_create_collection",
                     description="Create a collection",
                     arguments=[
-                        PromptArgument("name", "Collection name", True),
-                        PromptArgument("parent_key", "Parent collection key", False),
+                        PromptArgument(
+                            name="name", description="Collection name", required=True
+                        ),
+                        PromptArgument(
+                            name="parent_key",
+                            description="Parent collection key",
+                            required=False,
+                        ),
                     ],
                 ),
                 Prompt(
                     name="zotero_delete_collection",
                     description="Delete a collection",
                     arguments=[
-                        PromptArgument("collection_key", "Collection key", True),
+                        PromptArgument(
+                            name="collection_key",
+                            description="Collection key",
+                            required=True,
+                        ),
                     ],
                 ),
                 Prompt(
                     name="zotero_move_collection",
                     description="Move a collection",
                     arguments=[
-                        PromptArgument("collection_key", "Collection key", True),
                         PromptArgument(
-                            "parent_key",
-                            "New parent key (or 'root')",
-                            True,
+                            name="collection_key",
+                            description="Collection key",
+                            required=True,
+                        ),
+                        PromptArgument(
+                            name="parent_key",
+                            description="New parent key (or 'root')",
+                            required=True,
                         ),
                     ],
                 ),
@@ -300,8 +428,16 @@ class PromptHandler:
                     name="zotero_rename_collection",
                     description="Rename a collection",
                     arguments=[
-                        PromptArgument("collection_key", "Collection key", True),
-                        PromptArgument("new_name", "New collection name", True),
+                        PromptArgument(
+                            name="collection_key",
+                            description="Collection key",
+                            required=True,
+                        ),
+                        PromptArgument(
+                            name="new_name",
+                            description="New collection name",
+                            required=True,
+                        ),
                     ],
                 ),
             ]
@@ -315,15 +451,19 @@ class PromptHandler:
                     description="Update semantic search database",
                     arguments=[
                         PromptArgument(
-                            "force_rebuild",
-                            "Rebuild from scratch (true/false)",
-                            False,
+                            name="force_rebuild",
+                            description="Rebuild from scratch (true/false)",
+                            required=False,
                         ),
-                        PromptArgument("limit", "Maximum items to process", False),
                         PromptArgument(
-                            "extract_fulltext",
-                            "Index full text (true/false)",
-                            False,
+                            name="limit",
+                            description="Maximum items to process",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="extract_fulltext",
+                            description="Index full text (true/false)",
+                            required=False,
                         ),
                     ],
                 ),
@@ -341,7 +481,11 @@ class PromptHandler:
                 name="zotero_batch_get_metadata",
                 description="Get metadata for multiple items",
                 arguments=[
-                    PromptArgument("item_keys", "List of Zotero item keys", True),
+                    PromptArgument(
+                        name="item_keys",
+                        description="List of Zotero item keys",
+                        required=True,
+                    ),
                 ],
             )
         )
@@ -353,19 +497,43 @@ class PromptHandler:
                     name="zotero_prepare_analysis",
                     description="Prepare analysis data (Mode A)",
                     arguments=[
-                        PromptArgument("source", "collection | recent", True),
-                        PromptArgument("collection_name", "Collection name", False),
-                        PromptArgument("collection_key", "Collection key", False),
-                        PromptArgument("days", "Recent days window", False),
-                        PromptArgument("limit", "Maximum items", False),
                         PromptArgument(
-                            "include_annotations", "Include annotations", False
+                            name="source",
+                            description="collection | recent",
+                            required=True,
                         ),
                         PromptArgument(
-                            "include_multimodal", "Extract images/tables", False
+                            name="collection_name",
+                            description="Collection name",
+                            required=False,
                         ),
                         PromptArgument(
-                            "skip_existing_notes", "Skip items with notes", False
+                            name="collection_key",
+                            description="Collection key",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="days",
+                            description="Recent days window",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="limit", description="Maximum items", required=False
+                        ),
+                        PromptArgument(
+                            name="include_annotations",
+                            description="Include annotations",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="include_multimodal",
+                            description="Extract images/tables",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="skip_existing_notes",
+                            description="Skip items with notes",
+                            required=False,
                         ),
                     ],
                 ),
@@ -373,36 +541,74 @@ class PromptHandler:
                     name="zotero_batch_analyze_pdfs",
                     description="Batch analyze PDFs (Mode B)",
                     arguments=[
-                        PromptArgument("source", "collection | recent", True),
-                        PromptArgument("collection_name", "Collection name", False),
-                        PromptArgument("collection_key", "Collection key", False),
-                        PromptArgument("days", "Recent days window", False),
-                        PromptArgument("limit", "Maximum items", False),
                         PromptArgument(
-                            "resume_workflow_id", "Resume workflow ID", False
+                            name="source",
+                            description="collection | recent",
+                            required=True,
                         ),
                         PromptArgument(
-                            "skip_existing_notes", "Skip items with notes", False
+                            name="collection_name",
+                            description="Collection name",
+                            required=False,
                         ),
                         PromptArgument(
-                            "include_annotations", "Include annotations", False
+                            name="collection_key",
+                            description="Collection key",
+                            required=False,
                         ),
                         PromptArgument(
-                            "include_multimodal", "Extract images/tables", False
+                            name="days",
+                            description="Recent days window",
+                            required=False,
                         ),
                         PromptArgument(
-                            "llm_provider", "deepseek | claude-cli | auto", False
+                            name="limit", description="Maximum items", required=False
                         ),
-                        PromptArgument("llm_model", "Model name", False),
-                        PromptArgument("template", "Template name", False),
-                        PromptArgument("dry_run", "Preview only (true/false)", False),
+                        PromptArgument(
+                            name="resume_workflow_id",
+                            description="Resume workflow ID",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="skip_existing_notes",
+                            description="Skip items with notes",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="include_annotations",
+                            description="Include annotations",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="include_multimodal",
+                            description="Extract images/tables",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="llm_provider",
+                            description="deepseek | claude-cli | auto",
+                            required=False,
+                        ),
+                        PromptArgument(
+                            name="llm_model", description="Model name", required=False
+                        ),
+                        PromptArgument(
+                            name="template", description="Template name", required=False
+                        ),
+                        PromptArgument(
+                            name="dry_run",
+                            description="Preview only (true/false)",
+                            required=False,
+                        ),
                     ],
                 ),
                 Prompt(
                     name="zotero_resume_workflow",
                     description="Resume an interrupted workflow",
                     arguments=[
-                        PromptArgument("workflow_id", "Workflow ID", True),
+                        PromptArgument(
+                            name="workflow_id", description="Workflow ID", required=True
+                        ),
                     ],
                 ),
                 Prompt(
@@ -414,9 +620,13 @@ class PromptHandler:
                     name="zotero_find_collection",
                     description="Find collection by name",
                     arguments=[
-                        PromptArgument("name", "Collection name", True),
                         PromptArgument(
-                            "exact_match", "Exact match only (true/false)", False
+                            name="name", description="Collection name", required=True
+                        ),
+                        PromptArgument(
+                            name="exact_match",
+                            description="Exact match only (true/false)",
+                            required=False,
                         ),
                     ],
                 ),
