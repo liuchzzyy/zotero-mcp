@@ -1,390 +1,259 @@
 # Zotero MCP
 
-<p align="center">
-  <a href="https://www.zotero.org/">
-    <img src="https://img.shields.io/badge/Zotero-CC2936?style=for-the-badge&logo=zotero&logoColor=white" alt="Zotero">
-  </a>
-  <a href="https://modelcontextprotocol.io/introduction">
-    <img src="https://img.shields.io/badge/MCP-0175C2?style=for-the-badge&logoColor=white" alt="MCP">
-  </a>
-  <a href="https://github.com/liuchzzyy/zotero-mcp/releases">
-    <img src="https://img.shields.io/github/v/release/liuchzzyy/zotero-mcp?style=for-the-badge" alt="Release">
-  </a>
-</p>
+连接 AI 助手与 Zotero 研究库的 Model Context Protocol 服务器。
 
-**Zotero MCP** connects your [Zotero](https://www.zotero.org/) research library with AI assistants via the [Model Context Protocol](https://modelcontextprotocol.io/introduction). Search papers, extract PDF annotations, analyze research with AI, and automate your research workflow!
+## 业务逻辑框架
 
-## ✨ Key Features
-
-### 🤖 AI-Powered Research Analysis
-- **Batch PDF Analysis**: Analyze multiple papers with LLM (DeepSeek/OpenAI/Gemini)
-- **Multi-Modal PDF Analysis**: Advanced image and text analysis with OCR support
-- **Intelligent Metadata Enhancement**: Auto-complete metadata via Crossref/OpenAlex APIs
-- **Checkpoint/Resume**: Interrupted workflows automatically save progress and can be resumed
-- **Configurable Templates**: Customizable analysis output formats (JSON/Markdown)
-
-### 🔍 Semantic Search
-- **Vector-based similarity search** over your entire research library
-- **Multiple embedding models**: Default (free), OpenAI, and Gemini options
-- **Smart results** with similarity scores and contextual matching
-- **Auto-updating database** with configurable sync schedules
-
-### 📚 Advanced Search & Access
-- Multi-criteria search (title, author, tags, collections)
-- Browse collections, tags, and recent additions
-- Retrieve full text, attachments, notes, and child items
-- Export citations in multiple formats (JSON, Markdown)
-
-### 📝 PDF Annotation Extraction
-- Extract annotations directly from PDF files
-- Search through PDF annotations and comments
-- Image annotation support
-- Works alongside Zotero's native annotation system
-
-### 🗑️ Duplicate Detection & Removal
-- **Smart deduplication** by DOI, title, or URL priority
-- **Cross-folder copy detection**: Identical items in multiple folders are preserved
-- **Safe removal**: Duplicates moved to trash collection (not permanently deleted)
-- **Preview mode**: Dry-run to review before actual deletion
-- **Note/attachment protection**: Notes and attachments are never deleted
-
-## 📦 Installation
-
-### Quick Install with uv
-
-```bash
-# Install via uv
-uv tool install "git+https://github.com/liuchzzyy/zotero-mcp.git"
-
-# Configure
-zotero-mcp setup
-
-# Start server
-zotero-mcp serve
+```
+┌───────────────────────────────────────────────────────────
+│                   Entry Layer                             
+│  ├── server.py (MCP stdio server)                         
+│  └── cli.py (CLI)                                         
+├───────────────────────────────────────────────────────────
+│                   Handlers Layer                          
+│  ├── annotations.py  (PDF 注释工具)                        
+│  ├── batch.py        (批量操作工具)                        
+│  ├── collections.py  (集合管理工具)                        
+│  ├── database.py     (语义搜索工具)                        
+│  ├── items.py        (条目 CRUD 工具)                      
+│  ├── search.py       (搜索工具)                            
+│  └── workflow.py     (批量分析工作流工具)                   
+├───────────────────────────────────────────────────────────
+│                  Services Layer                           
+│  ├── zotero/                                              
+│  │   ├── ItemService         (CRUD 操作)                  
+│  │   ├── SearchService        (关键词/语义搜索)            
+│  │   ├── MetadataService      (DOI/元数据补全)             
+│  │   ├── MetadataUpdateService (条目元数据更新)            
+│  │   ├── SemanticSearch       (ChromaDB 向量搜索)          
+│  │   └── DuplicateService      (去重)                     
+│  ├── workflow.py      (批量分析 + 检查点)                 
+│  └── data_access.py  (本地 DB / Zotero API 门面)           
+├──────────────────────────────────────────────────────────
+│                  Clients Layer                        
+│  ├── zotero/          (Zotero API + 本地 DB)                      
+│  ├── database/        (ChromaDB 向量数据库)                     
+│  ├── metadata/        (Crossref + OpenAlex APIs)                 
+│  └── llm/            (DeepSeek/OpenAI/Gemini/Claude CLI)        
+└──────────────────────────────────────────────────────────
 ```
 
-### Requirements
-- Python 3.10+
-- Zotero 7+ (for local API with full-text access)
-- An MCP-compatible client (Claude Desktop, Continue.dev, etc.)
+## 核心服务
 
-## 🚀 Quick Start
+### 1. Scanner Service (`scanner.py`)
 
-### 1. Configuration
+**业务逻辑**: 扫描库中需要 AI 分析的条目
 
-```bash
-zotero-mcp setup
-```
+**实现**:
+- `GlobalScanner.scan_and_process()` - 多阶段扫描策略
+  1. 优先扫描 `source_collection` (默认: `00_INBOXS`)
+  2. 如需更多条目，扫描整个库
+  3. 累积候选项直到达到 `treated_limit`
+  4. 过滤有 PDF 但缺少"AI分析"标签的条目
+  5. 处理最多 `treated_limit` 个条目
 
-This creates `~/.config/zotero-mcp/config.json` with your settings.
+**参数** (默认值):
+| 参数 | 默认值 | 说明 |
+|------|---------|------|
+| `scan_limit` | 100 | 每批从 API 获取的条目数 |
+| `treated_limit` | 20 | 最多处理的条目总数 |
+| `source_collection` | `"00_INBOXS"` | 优先扫描的集合 |
+| `target_collection` | `"01_SHORTTERMS"` | 分析后移动到的集合 |
+| `dry_run` | `False` | 预览模式，不执行更改 |
+| `llm_provider` | `"auto"` | LLM 提供商 |
+| `include_multimodal` | `True` | 启用多模态分析 |
 
-### 2. Initialize Semantic Search (Optional)
+**跳过条件**: 条目有"AI分析"标签 或无 PDF 附件
 
-```bash
-# Fast metadata-only index
-zotero-mcp update-db
+### 2. Metadata Update Service (`metadata_update_service.py`)
 
-# Comprehensive full-text index
-zotero-mcp update-db --fulltext
+**业务逻辑**: 通过 Crossref/OpenAlex API 增强 Zotero 条目元数据
 
-# Check database status
-zotero-mcp db-status
-```
+**实现**:
+- `_clean_html_title()` - 清理 HTML 标签和实体
+- `_fetch_enhanced_metadata()` - 从 API 获取增强元数据
+  - 先通过 DOI 查询
+  - DOI 不存在时通过标题查询 Crossref
+  - 通过 DOI 查询 OpenAlex 获取额外字段
+- `_build_updated_item_data()` - 构建更新的条目数据
 
-### 3. Start the Server
+**参数** (默认值):
+| 参数 | 默认值 | 说明 |
+|------|---------|------|
+| `scan_limit` | 500 | 每批获取的条目数 |
+| `treated_limit` | 100 | 最多更新的条目数 |
+| `dry_run` | `False` | 预览模式 |
+| `skip_tag` | `"AI元数据"` | 跳过已有此标签的条目 |
 
-```bash
-zotero-mcp serve
-```
-
-### 4. Configure Your MCP Client
-
-Add to your MCP client configuration:
-
-```json
-{
-  "mcpServers": {
-    "zotero": {
-      "command": "zotero-mcp",
-      "args": [],
-      "env": {
-        "ZOTERO_LOCAL": "true"
-      }
-    }
-  }
+**字段映射**:
+```python
+_METADATA_FIELD_MAP = {
+    "doi": "DOI",
+    "journal": "publicationTitle",
+    "publisher": "publisher",
+    "volume": "volume",
+    "issue": "issue",
+    "pages": "pages",
+    "abstract": "abstractNote",
 }
 ```
 
-## 🛠️ Command-Line Tools
+### 3. Duplicate Detection Service (`duplicate_service.py`)
 
-### Semantic Search
+**业务逻辑**: 检测并删除重复的 Zotero 条目
+
+**实现**:
+- `find_and_remove_duplicates()` - 扫描并分组重复项
+  - 按优先级分组: DOI > 标题 > URL
+  - 保留最完整的条目（有附件/笔记）
+  - 将重复项移动到回收站集合
+
+**参数** (默认值):
+| 参数 | 默认值 | 说明 |
+|------|---------|------|
+| `collection_key` | `None` | 限制扫描的集合 |
+| `scan_limit` | 500 | 每批获取的条目数 |
+| `treated_limit` | 1000 | 最多找到的重复项数 |
+| `dry_run` | `False` | 预览模式 |
+| `trash_collection` | `"06_TRASHES"` | 移动重复项到的集合 |
+
+### 4. Workflow Service (`workflow.py`)
+
+**业务逻辑**: 带检查点/恢复的批量分析
+
+**实现**:
+- `analyze_items()` - 批量分析 PDF
+  - 检查跳过条件（已有标签、无 PDF）
+  - 提取 PDF 内容和图片
+  - 调用 LLM 分析
+  - 生成结构化笔记
+  - 保存笔记并添加标签
+- `CheckpointService` - 保存/恢复分析状态
+
+**参数** (默认值):
+| 参数 | 默认值 | 说明 |
+|------|---------|------|
+| `llm_provider` | `"auto"` | LLM 提供商 |
+| `multimodal` | `True` | 启用多模态分析 |
+| `target_collection` | `"01_SHORTTERMS"` | 分析后移动到的集合 |
+| `note_format` | `"html"` | 笔记格式 |
+
+**检查点文件**: `~/.config/zotero-mcp/checkpoints/{workflow_id}.json`
+
+### 5. Semantic Search (`semantic_search.py`)
+
+**业务逻辑**: ChromaDB 向量相似度搜索
+
+**实现**:
+- `SemanticSearch.search()` - 向量搜索
+  - 查询文本嵌入
+  - ChromaDB 相似度搜索
+  - 返回带分数的结果
+
+**参数** (默认值):
+| 参数 | 默认值 | 说明 |
+|------|---------|------|
+| `limit` | 10 | 返回结果数 |
+| `min_score` | 0.0 | 最低相似度分数 |
+
+**嵌入模型**:
+- `default`: 免费模型 (chromadb-default)
+- `openai`: `text-embedding-3-small`
+- `gemini`: `models/text-embedding-004`
+
+## CLI 命令
+
+### 扫描和分析
 ```bash
-zotero-mcp update-db                      # Update database (metadata)
-zotero-mcp update-db --fulltext           # Update with full-text
-zotero-mcp update-db --force-rebuild      # Force complete rebuild
-zotero-mcp db-status                      # Check database status
-zotero-mcp db-inspect                     # Inspect indexed documents
+zotero-mcp scan                    # 扫描未处理论文
+zotero-mcp scan --treated-limit 10  # 最多处理 10 条
+zotero-mcp scan --source-collection "00_INBOXS"
 ```
 
-### Research Workflow
+### 元数据更新
 ```bash
-zotero-mcp scan                            # Scan for unprocessed papers
-zotero-mcp update-metadata                 # Enhance metadata from APIs
-zotero-mcp deduplicate                     # Find and remove duplicates
-zotero-mcp deduplicate --dry-run           # Preview duplicates
-zotero-mcp pdf-find --item-key ABCD1234     # Find PDFs/SI for a single item
-zotero-mcp pdf-find --collection-name 00_INBOXS  # Batch find PDFs/SI by collection
+zotero-mcp update-metadata                      # 更新元数据
+zotero-mcp update-metadata --treated-limit 50   # 最多更新 50 条
+zotero-mcp update-metadata --dry-run          # 预览模式
 ```
 
-### Updates & Maintenance
+### 去重
 ```bash
-zotero-mcp update                          # Update to latest version
-zotero-mcp update --check-only             # Check for updates
-zotero-mcp version                         # Show version info
-zotero-mcp setup-info                      # Show installation info
-```
-
-## 🤖 Available MCP Tools
-
-### Search & Discovery
-- `zotero_semantic_search` - AI-powered similarity search
-- `zotero_search` - Keyword search
-- `zotero_advanced_search` - Multi-criteria search
-- `zotero_search_by_tag` - Tag-based search
-- `zotero_get_recent` - Recent items
-
-### Content Access
-- `zotero_get_metadata` - Item metadata
-- `zotero_get_fulltext` - Full text content
-- `zotero_get_bundle` - Comprehensive item data
-- `zotero_get_children` - Attachments and notes
-
-### Collections & Tags
-- `zotero_get_collections` - List collections
-- `zotero_find_collection` - Find by name (fuzzy matching)
-- `zotero_get_tags` - List all tags
-
-### Annotations & Notes
-- `zotero_get_annotations` - PDF annotations
-- `zotero_get_notes` - Retrieve notes
-- `zotero_search_notes` - Search in notes/annotations
-- `zotero_create_note` - Create new note
-
-### Batch Workflow
-- `zotero_prepare_analysis` - Collect PDF content for review
-- `zotero_batch_analyze_pdfs` - AI-powered batch analysis
-- `zotero_resume_workflow` - Resume interrupted workflow
-- `zotero_list_workflows` - View workflow states
-
-### PDF Discovery
-- `zotero_find_pdf_si` - Find PDFs and supporting information (single)
-- `zotero_find_pdf_si_batch` - Batch find PDFs and supporting information
-
-## 🔧 Configuration
-
-### Environment Variables
-
-**Zotero Connection:**
-```bash
-ZOTERO_LOCAL=true                    # Use local API (default)
-ZOTERO_API_KEY=your_key             # Required for web API
-ZOTERO_LIBRARY_ID=your_id           # Required for web API
-ZOTERO_LIBRARY_TYPE=user            # or 'group'
-```
-
-**Semantic Search:**
-```bash
-ZOTERO_EMBEDDING_MODEL=default      # default, openai, gemini
-OPENAI_API_KEY=your_key
-OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-GEMINI_API_KEY=your_key
-GEMINI_EMBEDDING_MODEL=models/text-embedding-004
-```
-
-**Batch Analysis:**
-```bash
-DEEPSEEK_API_KEY=your_key
-DEEPSEEK_MODEL=deepseek-chat
-```
-
-**Multi-Modal Analysis:**
-```bash
-# CLI LLM Provider Configuration
-ZOTERO_MCP_CLI_LLM_PROVIDER=deepseek       # deepseek, openai, gemini, claude
-ZOTERO_MCP_CLI_LLM_MODEL=deepseek-chat     # Model to use
-ZOTERO_MCP_CLI_LLM_API_KEY=your_key       # API key for the provider
-
-# OCR Configuration
-ZOTERO_MCP_CLI_LLM_OCR_ENABLED=true        # Enable OCR mode
-ZOTERO_MCP_CLI_LLM_OCR_LANGUAGES=zh,en     # OCR languages
-ZOTERO_MCP_CLI_LLM_OCR_ENGINE=tesseract    # OCR engine
-
-# Analysis Parameters
-ZOTERO_MCP_CLI_LLM_MAX_PAGES=50            # Max pages to process
-ZOTERO_MCP_CLI_LLM_MAX_IMAGES=20           # Max images to extract
-ZOTERO_MCP_CLI_LLM_CHUNK_SIZE=2000         # Text chunk size
-```
-
-### Web API Setup
-
-For remote access without Zotero desktop:
-
-```bash
-zotero-mcp setup --no-local \
-  --api-key YOUR_API_KEY \
-  --library-id YOUR_LIBRARY_ID
-```
-
-Get your API key from https://www.zotero.org/settings/keys
-
-## 📊 Automated Workflows (GitHub Actions)
-
-### Pre-configured Workflows
-
-**Daily Global Analysis**
-- Scans library for unprocessed papers
-- Analyzes with AI (DeepSeek/CLI)
-- Creates structured notes
-- Runs daily at 17:00 UTC
-
-**Metadata Update**
-- Enriches bibliographic fields via Crossref/OpenAlex
-- Runs on schedule or manual trigger
-
-**Deduplication**
-- Finds and quarantines duplicates by DOI/title/URL
-- Runs on schedule or manual trigger
-
-**Manual Triggers**
-All workflows support on-demand execution with dry-run mode.
-
-### Setup Guide
-
-See [GitHub Actions Guide](./docs/GITHUB_ACTIONS_GUIDE.md) for detailed setup instructions.
-
-## 🔍 Deduplication
-
-### How It Works
-
-1. **Priority Matching**: DOI > Title > URL
-2. **Smart Detection**: Identifies true duplicates vs. cross-folder copies
-3. **Safe Removal**: Moves to trash collection (`06_TRASHES` by default)
-4. **Preview Mode**: `--dry-run` to review before deletion
-
-### Usage
-
-```bash
-# Preview duplicates
-zotero-mcp deduplicate --dry-run --scan-limit 100 --treated-limit 10
-
-# Remove duplicates
-zotero-mcp deduplicate --scan-limit 100 --treated-limit 50
-
-# Custom trash collection
+zotero-mcp deduplicate                    # 查找并删除重复项
+zotero-mcp deduplicate --dry-run          # 预览重复项
 zotero-mcp deduplicate --trash-collection "My Trash"
-
-# Limit to specific collection
-zotero-mcp deduplicate --collection ABC123
 ```
 
-### What Gets Deleted
-
-✅ **Deleted (True Duplicates):**
-- Same DOI but different metadata
-- Same title but different metadata
-- Same URL but different metadata
-- Items without attachments/notes are deleted, most complete kept
-
-❌ **Preserved (Cross-Folder Copies):**
-- Identical metadata in multiple collections
-- Notes and attachments are never deleted
-- Most complete item (with attachments/notes) is kept
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**"No results found"**
-- Ensure Zotero is running
-- Enable "Allow other applications to communicate" in Zotero preferences
-- Check `zotero-mcp db-status` for semantic search
-
-**"DeepSeek API key not found"**
-- Set `DEEPSEEK_API_KEY` environment variable
-- Or configure in `~/.config/zotero-mcp/config.json`
-
-**"Database update takes too long"**
-- Default `update-db` is fast (metadata-only)
-- Use `--limit 100` for testing
-- Use `--fulltext` only when needed (comprehensive but slow)
-
-**Workflow interrupted**
-- Use `zotero_list_workflows()` to find workflow ID
-- Use `zotero_resume_workflow(workflow_id)` to continue
-
-**Items not moving to trash collection**
-- Verify collection name is correct (default: `06_TRASHES`)
-- Check that collection exists in your library
-- Use `--dry-run` to preview before actual deletion
-
-### Recovery
-
-**Restore deleted duplicates:**
-Items are moved to trash collection, not permanently deleted. Simply move them back to restore.
-
-**Rebuild search database:**
+### 语义搜索
 ```bash
-zotero-mcp update-db --force-rebuild
+zotero-mcp update-db                    # 更新数据库（元数据）
+zotero-mcp update-db --fulltext          # 包含全文
+zotero-mcp update-db --force-rebuild      # 强制重建
+zotero-mcp db-status                      # 检查状态
 ```
 
-**Reset configuration:**
-```bash
-rm ~/.config/zotero-mcp/config.json
-zotero-mcp setup
-```
+## 环境变量
 
-## 📚 Documentation
+### Zotero 连接
+| 变量 | 默认值 | 说明 |
+|------|---------|------|
+| `ZOTERO_LOCAL` | `true` | 使用本地 API |
+| `ZOTERO_API_KEY` | - | Web API 密钥 |
+| `ZOTERO_LIBRARY_ID` | - | Web API 库 ID |
+| `ZOTERO_LIBRARY_TYPE` | `user` | 库类型 |
 
-- [CLAUDE.md](./CLAUDE.md) - Development guidelines for Claude Code
-- [中文指南](./docs/中文指南.md) - 最新逻辑框架与函数说明
-- [CONTRIBUTING.md](./CONTRIBUTING.md) - Contribution guidelines
-- [Batch Workflow Example](./examples/workflow_example.py) - Production-grade code example
+### 语义搜索
+| 变量 | 默认值 | 说明 |
+|------|---------|------|
+| `ZOTERO_EMBEDDING_MODEL` | `default` | 嵌入模型 |
+| `OPENAI_API_KEY` | - | OpenAI 密钥 |
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | OpenAI 模型 |
+| `GEMINI_API_KEY` | - | Gemini 密钥 |
+| `GEMINI_EMBEDDING_MODEL` | `models/text-embedding-004` | Gemini 模型 |
 
-## 🏗️ Architecture Overview
+### 批量分析
+| 变量 | 默认值 | 说明 |
+|------|---------|------|
+| `DEEPSEEK_API_KEY` | - | DeepSeek 密钥 |
+| `DEEPSEEK_MODEL` | `deepseek-chat` | DeepSeek 模型 |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | API endpoint |
 
-Zotero MCP is now a single, cohesive package with a Logseq-inspired layering:
+### 多模态分析
+| 变量 | 默认值 | 说明 |
+|------|---------|------|
+| `ZOTERO_MCP_CLI_LLM_PROVIDER` | `deepseek` | LLM 提供商 |
+| `ZOTERO_MCP_CLI_LLM_OCR_ENABLED` | `true` | 启用 OCR |
+| `ZOTERO_MCP_CLI_LLM_MAX_PAGES` | `50` | 最大处理页数 |
+| `ZOTERO_MCP_CLI_LLM_MAX_IMAGES` | `20` | 最大提取图片数 |
 
-```
-src/zotero_mcp
-├── server.py    # MCP stdio server entrypoint
-├── cli.py       # CLI entrypoint
-├── clients/     # External APIs (Zotero, metadata, LLM, database)
-├── input/       # External input adapters (paper-feed)
-├── handlers/    # MCP tool/prompt handlers (logseq-mcp style)
-├── services/    # Core business logic (search, items, workflows)
-├── models/      # Pydantic schemas and AI models
-├── analyzer/    # PDF analysis and LLM pipelines
-├── settings.py  # Pydantic Settings (logseq-mcp aligned)
-└── utils/       # Shared helpers (config, logging, formatting)
-```
+## MCP 工具
 
-The PDF analyzer and Zotero core logic are fully integrated into the main package to reduce duplication and keep a single source of truth.
+### 搜索工具
+- `zotero_semantic_search` - 语义搜索
+- `zotero_search` - 关键词搜索
+- `zotero_advanced_search` - 高级搜索
+- `zotero_search_by_tag` - 标签搜索
+- `zotero_get_recent` - 最近条目
 
-## 📝 Changelog
+### 内容访问
+- `zotero_get_metadata` - 条目元数据
+- `zotero_get_fulltext` - 全文内容
+- `zotero_get_bundle` - 完整条目数据
+- `zotero_get_children` - 附件和笔记
 
-The current version is defined in `pyproject.toml`. See `CHANGELOG.md` for the full release history.
+### 集合和标签
+- `zotero_get_collections` - 列出集合
+- `zotero_find_collection` - 按名称查找（模糊匹配）
+- `zotero_get_tags` - 列出所有标签
 
-## 📄 License
+### 注释和笔记
+- `zotero_get_annotations` - PDF 注释
+- `zotero_get_notes` - 获取笔记
+- `zotero_search_notes` - 搜索笔记/注释
+- `zotero_create_note` - 创建笔记
 
-MIT License - see [LICENSE](./LICENSE) for details.
-
-## 🙏 Acknowledgments
-
-- [Zotero](https://www.zotero.org/) - Excellent reference management software
-- [Model Context Protocol](https://modelcontextprotocol.io/) - Standard for AI tool integration
-- [ChromaDB](https://www.trychroma.com/) - Vector database for semantic search
-- All contributors and users of Zotero MCP!
-
----
-
-**Made with ❤️ for researchers worldwide**
+### 批量工作流
+- `zotero_prepare_analysis` - 收集 PDF 内容
+- `zotero_batch_analyze_pdfs` - 批量 AI 分析
+- `zotero_resume_workflow` - 恢复中断的工作流
+- `zotero_list_workflows` - 查看工作流状态

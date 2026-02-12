@@ -9,16 +9,8 @@ description = "A Model Context Protocol server for Zotero"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.12"
-authors = [
-    { name = "54yyyu", email = "54yyyu@github.com" },
-]
-keywords = [
-    "mcp",
-    "zotero",
-    "model-context-protocol",
-    "research",
-    "semantic-search",
-]
+authors = [{ name = "54yyyu", email = "54yyyu@github.com" }]
+keywords = ["mcp", "zotero", "model-context-protocol", "research", "semantic-search"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -31,111 +23,39 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
-# ==============================================================================
-# DEPENDENCY MANAGEMENT
-# ==============================================================================
-#
-# Dependencies are organized into three categories:
-# 1. Core dependencies: Required for runtime functionality
-# 2. Optional dependencies: Not required but recommended for full functionality
-# 3. Development dependencies: Only needed for development and testing
-#
-# Security Updates:
-# - Run `uv pip list --outdated` to check for updates
-# - Run `uv pip update --upgrade` to update all packages
-# - Review security advisories at https://github.com/advisories
-#
-# Dependency Audit:
-# - Run `uv pip check` to check for dependency conflicts
-# - Run `pip-audit` to check for known vulnerabilities
-# ==============================================================================
-
-# -------------------- Core Dependencies --------------------
-#
-# These dependencies are required for the application to run.
-# They are installed automatically when the package is installed.
-#
-# To add a new core dependency:
-# 1. Add it below with version constraints
-# 2. Document why it's needed in the comment above
-# 3. Run `uv sync` to install it
-# 4. Update this section when adding/removing dependencies
-
 dependencies = [
-    # MCP Server Framework
-    "mcp>=1.2.0",  # Model Context Protocol SDK
-
-    # Zotero Integration
-    "pyzotero>=1.5.0",  # Zotero API client library
-
-    # AI/LLM Clients
-    "openai>=1.0.0",  # OpenAI API client (for GPT models)
-    "google-generativeai>=0.3.0",  # Google Gemini API client
-
-    # Data Processing
-    "beautifulsoup4>=4.14.3",  # HTML/XML parsing for web scraping
-    "pydantic>=2.0.0",  # Data validation and settings management
-
-    # Semantic Search
-    "chromadb>=0.4.0",  # Vector database for semantic search
-
-    # HTTP Clients
-    "httpx>=0.24.0",  # Async HTTP client (Crossref, OpenAlex APIs)
-    "requests>=2.28.0",  # Sync HTTP client (fallback)
-
-    # Configuration
-    "python-dotenv>=1.0.0",  # Load environment variables from .env files
-    "pyyaml>=6.0.3",  # Parse YAML configuration files
-
-    # Document Processing
-    "markitdown[pdf]>=0.0.1",  # PDF to Markdown conversion
-
-    # Multi-modal PDF Processing (PyMuPDF)
-    "pymupdf>=1.24.0",  # PyMuPDF (fitz) - High-performance PDF library (~10x faster than pdfplumber)
-    "pymupdf4llm>=0.0.7",  # LLM-optimized helpers for PyMuPDF
-    "Pillow>=10.0.0",  # Image processing for PDF page images
+    "mcp>=1.2.0",
+    "pyzotero>=1.5.0",
+    "openai>=1.0.0",
+    "google-generativeai>=0.3.0",
+    "beautifulsoup4>=4.14.3",
+    "pydantic>=2.0.0",
+    "chromadb>=0.4.0",
+    "httpx>=0.24.0",
+    "requests>=2.28.0",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0.3",
+    "markitdown[pdf]>=0.0.1",
+    "pymupdf>=1.24.0",
+    "pymupdf4llm>=0.0.7",
+    "Pillow>=10.0.0",
 ]
-
-# -------------------- Development Dependencies --------------------
-#
-# These dependencies are only needed for development and testing.
-# They are NOT installed when the package is installed in production.
-#
-# To install development dependencies:
-#   uv sync --group dev
-#   uv sync --all  # Install all dev groups
 
 [dependency-groups]
 dev = [
-    # Testing Framework
-    "pytest>=7.0.0",  # Testing framework
-    "pytest-asyncio>=0.21.0",  # Async support for pytest
-    "pytest-cov>=4.0.0",  # Code coverage plugin for pytest
-    # Code Quality
-    "ruff>=0.14.13",  # Fast Python linter and formatter (black, isort, flake8 replacement)
-    "ty>=0.0.12",  # Fast type checker (mypy replacement)
-    "basedpyright>=1.37.2",  # Pyright type checker (alternative to mypy)
-    # Security
-    "pip-audit>=2.0.0",  # Audit dependencies for known vulnerabilities
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.14.13",
+    "ty>=0.0.12",
+    "basedpyright>=1.37.2",
+    "pip-audit>=2.0.0",
     "radon>=6.0.1",
 ]
 
-# -------------------- Optional Dependencies --------------------
-#
-# These dependencies are not required but provide additional functionality.
-# Install them manually if needed:
-#   uv pip install <package>
-#
-# Optional dependencies are not listed here to keep the package lightweight.
-# Users can install them as needed based on their use case.
-
 [project.optional-dependencies]
-ocr = [
-    "pytesseract>=0.3.10",
-]
-all = [
-    "zotero-mcp[ocr]",
-]
+ocr = ["pytesseract>=0.3.10"]
+all = ["zotero-mcp[ocr]"]
 
 [project.urls]
 Homepage = "https://github.com/liuchzzyy/zotero-mcp"
@@ -147,8 +67,6 @@ Changelog = "https://github.com/liuchzzyy/zotero-mcp/releases"
 [project.scripts]
 zotero-mcp = "zotero_mcp.cli:main"
 
-# === Tool Configurations ===
-
 [tool.ruff]
 line-length = 88
 target-version = "py312"
@@ -157,23 +75,10 @@ target-version = "py312"
 python-version = "3.12"
 
 [tool.ruff.lint]
-select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "B",   # flake8-bugbear
-    "C4",  # flake8-comprehensions
-    "UP",  # pyupgrade
-]
-ignore = [
-    "E501",  # line too long (handled by black)
-    "B008",  # do not perform function calls in argument defaults
-    "C901",  # too complex
-]
+select = ["E", "F", "I", "B", "C4", "UP"]
 
 [tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]  # Allow unused imports in __init__.py
+"__init__.py" = ["F401"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["zotero_mcp"]
@@ -185,12 +90,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = [
-    "-ra",
-    "--strict-markers",
-    "--strict-config",
-    "--showlocals",
-]
+addopts = ["-ra", "--strict-markers", "--showlocals"]
 asyncio_mode = "auto"
 markers = [
     "integration: marks tests as integration tests (requires Zotero running)",
@@ -199,10 +99,7 @@ markers = [
 
 [tool.coverage.run]
 source = ["zotero_mcp"]
-omit = [
-    "*/tests/*",
-    "*/test_*.py",
-]
+omit = ["*/tests/*", "*/test_*.py"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -210,7 +107,7 @@ exclude_lines = [
     "def __repr__",
     "raise AssertionError",
     "raise NotImplementedError",
-    "if __name__ == .__main__.:",
+    "if __name__ == .__main__:",
     "if TYPE_CHECKING:",
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
