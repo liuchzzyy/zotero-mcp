@@ -364,7 +364,9 @@ async def test_batch_analyze_auto_selects_multimodal_llm(
     # Mock LLM client
     mock_llm_client = AsyncMock()
     mock_llm_client.provider = "claude-cli"
-    mock_llm_client.analyze_paper = AsyncMock(return_value="Analysis result")
+    mock_llm_client.analyze_paper = AsyncMock(
+        return_value='```json\n{"sections":[{"type":"heading","level":3,"text":"A"},{"type":"paragraph","text":"B"},{"type":"paragraph","text":"C"}]}\n```'
+    )
 
     # Mock data service operations
     workflow_service.data_service.get_notes = AsyncMock(return_value=[])
@@ -452,7 +454,9 @@ async def test_batch_analyze_auto_selects_text_llm(workflow_service, mock_batch_
     # Mock LLM client
     mock_llm_client = AsyncMock()
     mock_llm_client.provider = "deepseek"
-    mock_llm_client.analyze_paper = AsyncMock(return_value="Analysis result")
+    mock_llm_client.analyze_paper = AsyncMock(
+        return_value='```json\n{"sections":[{"type":"heading","level":3,"text":"A"},{"type":"paragraph","text":"B"},{"type":"paragraph","text":"C"}]}\n```'
+    )
 
     # Mock data service operations
     workflow_service.data_service.get_notes = AsyncMock(return_value=[])
@@ -545,3 +549,58 @@ async def test_call_llm_analysis_no_images_for_text_llm(workflow_service):
     llm_client.analyze_paper.assert_called_once()
     call_args = llm_client.analyze_paper.call_args
     assert call_args.kwargs["images"] is None
+
+
+@pytest.mark.asyncio
+async def test_structured_quality_retry_up_to_three_times(workflow_service):
+    """Should retry at most 3 times when structured output remains too sparse."""
+    item = MagicMock()
+    item.key = "ITEM1"
+
+    llm_client = AsyncMock()
+    workflow_service._call_llm_analysis = AsyncMock(
+        side_effect=["bad retry 1", "bad retry 2", "bad retry 3"]
+    )
+
+    result = await workflow_service._ensure_structured_quality(
+        item=item,
+        llm_client=llm_client,
+        metadata={"data": {}},
+        fulltext="Full text",
+        annotations=[],
+        template="template",
+        images=None,
+        analysis_content="initial bad output",
+    )
+
+    assert result is None
+    assert workflow_service._call_llm_analysis.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_structured_quality_recovers_within_retry_limit(workflow_service):
+    """Should return recovered content when one retry becomes structured enough."""
+    item = MagicMock()
+    item.key = "ITEM2"
+
+    llm_client = AsyncMock()
+    workflow_service._call_llm_analysis = AsyncMock(
+        side_effect=[
+            "still bad",
+            '```json\n{"sections":[{"type":"heading","level":3,"text":"A"},{"type":"paragraph","text":"B"},{"type":"paragraph","text":"C"}]}\n```',
+        ]
+    )
+
+    result = await workflow_service._ensure_structured_quality(
+        item=item,
+        llm_client=llm_client,
+        metadata={"data": {}},
+        fulltext="Full text",
+        annotations=[],
+        template="template",
+        images=None,
+        analysis_content="initial bad output",
+    )
+
+    assert result is not None
+    assert workflow_service._call_llm_analysis.await_count == 2
