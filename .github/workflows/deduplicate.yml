@@ -102,7 +102,7 @@ jobs:
           if [ -f dedup.log ]; then
             SCANNED=$(grep -oE '(Total scanned|Scanned): [0-9]+' dedup.log | tail -1 | grep -oE '[0-9]+' || echo "0")
             DUPLICATES=$(grep -oE 'Duplicates found: [0-9]+' dedup.log | tail -1 | grep -oE '[0-9]+' || echo "0")
-            MOVED=$(grep -oE '(Duplicates moved to [^:]+|Moved): [0-9]+' dedup.log | tail -1 | grep -oE '[0-9]+' || echo "0")
+            MOVED=$(grep -oE '(Duplicates moved to [^:]+|Moved): [0-9]+' dedup.log | tail -1 | awk -F': ' '{print $NF}' || echo "0")
             CROSS_FOLDER=$(grep -oE 'Cross-folder copies \(skipped\): [0-9]+' dedup.log | tail -1 | grep -oE '[0-9]+' || echo "0")
             echo "json={\"Scanned\":\"${SCANNED}\",\"Duplicates found\":\"${DUPLICATES}\",\"Moved to trash\":\"${MOVED}\",\"Cross-folder copies (skipped)\":\"${CROSS_FOLDER}\"}" >> $GITHUB_OUTPUT
           else
