@@ -60,7 +60,47 @@ class StructuredNoteParser:
             return self._parse_json(content)
         except (json.JSONDecodeError, ValueError) as e:
             logger.debug(f"JSON parsing failed: {e}, falling back to Markdown")
-            return self._parse_markdown(content)
+            blocks = self._parse_markdown(content)
+
+            # Recovery: some models return JSON-like content that falls back to a
+            # single code/paragraph block. Try one more JSON extraction pass.
+            recovered = self._recover_json_from_single_block(blocks)
+            if recovered:
+                logger.info(
+                    f"Recovered structured JSON from markdown fallback: {len(recovered)} blocks"
+                )
+                return recovered
+
+            return blocks
+
+    def _recover_json_from_single_block(self, blocks: list[AnyBlock]) -> list[AnyBlock] | None:
+        """Try to recover JSON sections when fallback produced a single block."""
+        if len(blocks) != 1:
+            return None
+
+        candidate_text = ""
+        block = blocks[0]
+        if isinstance(block, CodeBlock):
+            candidate_text = block.content or ""
+        elif isinstance(block, ParagraphBlock):
+            candidate_text = block.content or ""
+        else:
+            return None
+
+        if not candidate_text:
+            return None
+
+        # First try the whole candidate text.
+        recovered = self._try_parse_json_str(candidate_text)
+        if recovered:
+            return recovered
+
+        # Then try extracting the broadest JSON object payload.
+        json_match = re.search(r"\{[\s\S]*\}", candidate_text)
+        if not json_match:
+            return None
+
+        return self._try_parse_json_str(json_match.group(0))
 
     def _try_parse_json_str(self, json_str: str) -> list[AnyBlock] | None:
         """

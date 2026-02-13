@@ -44,6 +44,8 @@ class WorkflowService:
     """Service for batch PDF analysis workflows."""
 
     BATCH_CHUNK_SIZE = 5
+    MIN_STRUCTURED_BLOCKS = 3
+    MAX_STRUCTURED_RETRIES = 3
 
     def __init__(self):
         self.data_service = get_data_service()
@@ -540,6 +542,28 @@ class WorkflowService:
                     processing_time=time.time() - start_time,
                 )
 
+            # 4.1 Guardrail: retry once when structured output is too sparse
+            # (e.g., only a single block), which often indicates malformed JSON.
+            if use_structured:
+                analysis_content = await self._ensure_structured_quality(
+                    item=item,
+                    llm_client=llm_client,
+                    metadata=bundle.get("metadata", {}),
+                    fulltext=context["fulltext"],
+                    annotations=context["annotations"],
+                    template=template,
+                    images=images_to_send,
+                    analysis_content=analysis_content,
+                )
+                if analysis_content is None:
+                    return ItemAnalysisResult(
+                        item_key=item.key,
+                        title=item.title,
+                        success=False,
+                        error="结构化输出质量不足（重试后仍未达到最小块数）",
+                        processing_time=time.time() - start_time,
+                    )
+
             # 5. Save note (if not dry run)
             note_key = None
             if not dry_run:
@@ -669,6 +693,73 @@ class WorkflowService:
             images=images,
             template=template,
         )
+
+    async def _ensure_structured_quality(
+        self,
+        item: Any,
+        llm_client: Any,
+        metadata: dict,
+        fulltext: str,
+        annotations: list,
+        template: str,
+        images: list | None,
+        analysis_content: str,
+    ) -> str | None:
+        """Ensure structured output has enough blocks; retry up to max times."""
+        parser = get_structured_note_parser()
+
+        try:
+            block_count = len(parser.parse(analysis_content))
+        except Exception:
+            block_count = 0
+
+        if block_count >= self.MIN_STRUCTURED_BLOCKS:
+            return analysis_content
+
+        current_content = analysis_content
+        current_blocks = block_count
+        for retry_idx in range(1, self.MAX_STRUCTURED_RETRIES + 1):
+            logger.warning(
+                f"Structured output too sparse for {item.key}: {current_blocks} blocks; "
+                f"retry {retry_idx}/{self.MAX_STRUCTURED_RETRIES}"
+            )
+            retry_template = (
+                f"{template}\n\n"
+                "【格式约束（必须遵守）】\n"
+                "1. 只输出一个 ```json ... ``` 代码块\n"
+                "2. 顶层必须是 {\"sections\": [...]} \n"
+                "3. sections 至少包含 6 个 block\n"
+                "4. 不要输出任何解释文字"
+            )
+            retry_content = await self._call_llm_analysis(
+                item=item,
+                llm_client=llm_client,
+                metadata=metadata,
+                fulltext=fulltext,
+                annotations=annotations,
+                template=retry_template,
+                images=images,
+            )
+            if not retry_content:
+                continue
+
+            current_content = retry_content
+            try:
+                current_blocks = len(parser.parse(retry_content))
+            except Exception:
+                current_blocks = 0
+
+            if current_blocks >= self.MIN_STRUCTURED_BLOCKS:
+                logger.info(
+                    f"Structured output recovered for {item.key}: {current_blocks} blocks"
+                )
+                return current_content
+
+        logger.warning(
+            f"Structured output still sparse for {item.key}: {current_blocks} blocks "
+            f"after {self.MAX_STRUCTURED_RETRIES} retries"
+        )
+        return None
 
     async def _delete_old_notes(
         self, item_key: str, notes: list
