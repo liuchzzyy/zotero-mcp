@@ -371,6 +371,7 @@ async def test_batch_analyze_auto_selects_multimodal_llm(
     workflow_service.data_service.create_note = AsyncMock(
         return_value={"successful": {"NOTE1": {"key": "NOTE1"}}}
     )
+    workflow_service.data_service.add_tags_to_item = AsyncMock(return_value={})
 
     with patch(
         "zotero_mcp.services.workflow.get_llm_client", return_value=mock_llm_client
@@ -387,6 +388,9 @@ async def test_batch_analyze_auto_selects_multimodal_llm(
     assert response.processed == 1
     assert len(response.results) == 1
     assert response.results[0].success is True
+    workflow_service.data_service.add_tags_to_item.assert_awaited_once_with(
+        "ITEM1", ["AI分析"]
+    )
 
 
 @pytest.mark.asyncio
@@ -455,6 +459,7 @@ async def test_batch_analyze_auto_selects_text_llm(workflow_service, mock_batch_
     workflow_service.data_service.create_note = AsyncMock(
         return_value={"successful": {"NOTE1": {"key": "NOTE1"}}}
     )
+    workflow_service.data_service.add_tags_to_item = AsyncMock(return_value={})
 
     with patch(
         "zotero_mcp.services.workflow.get_llm_client", return_value=mock_llm_client
@@ -469,6 +474,9 @@ async def test_batch_analyze_auto_selects_text_llm(workflow_service, mock_batch_
     # Should have processed successfully
     assert response.total_items == 1
     assert response.processed == 1
+    workflow_service.data_service.add_tags_to_item.assert_awaited_once_with(
+        "ITEM1", ["AI分析"]
+    )
 
 
 # -------------------- Test _call_llm_analysis with images --------------------
