@@ -159,7 +159,7 @@ class CLILLMClient:
 
 ## 论文全文
 
-{fulltext[:50000]}
+{fulltext}
 
 {annotations_section}
 {images_section}
@@ -221,7 +221,7 @@ class CLILLMClient:
                 journal=journal or "未知",
                 date=date or "未知",
                 doi=doi or "未知",
-                fulltext=fulltext[:50000],
+                fulltext=fulltext,
                 annotations_section=annotations_section,
                 images_section=images_section,
                 multimodal_section=multimodal_section,
