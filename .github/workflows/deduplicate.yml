@@ -109,7 +109,7 @@ jobs:
           payload = {}
           if start >= 0:
               try:
-                  payload = json.loads("\\n".join(lines[start:]))
+                  payload = json.loads("\n".join(lines[start:]))
               except Exception:
                   payload = {}
 
@@ -120,7 +120,7 @@ jobs:
               "Cross-folder copies (skipped)": str(payload.get("cross_folder_copies", 0)),
           }
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
-              f.write("json=" + json.dumps(out, ensure_ascii=False) + "\\n")
+              f.write("json=" + json.dumps(out, ensure_ascii=False) + "\n")
           PY
           else
             echo "json={}" >> $GITHUB_OUTPUT

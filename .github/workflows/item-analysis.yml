@@ -137,7 +137,7 @@ jobs:
           payload = {}
           if start >= 0:
               try:
-                  payload = json.loads("\\n".join(lines[start:]))
+                  payload = json.loads("\n".join(lines[start:]))
               except Exception:
                   payload = {}
 
@@ -154,7 +154,7 @@ jobs:
               "Skipped(no fulltext)": str(skipped_no_fulltext),
           }
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
-              f.write("json=" + json.dumps(out, ensure_ascii=False) + "\\n")
+              f.write("json=" + json.dumps(out, ensure_ascii=False) + "\n")
           PY
           else
             echo "json={}" >> $GITHUB_OUTPUT
