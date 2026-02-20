@@ -78,10 +78,11 @@ jobs:
           if [ "$INPUT_DRY_RUN" = "true" ]; then
             ARGS+=(--dry-run)
           fi
+          ARGS+=(--output json)
 
-          echo "Command: zotero-mcp update-metadata ${ARGS[*]}"
+          echo "Command: zotero-mcp workflow metadata-update ${ARGS[*]}"
           START_TIME=$(date +%s)
-          uv run zotero-mcp update-metadata "${ARGS[@]}" 2>&1 | tee metadata-update.log
+          uv run zotero-mcp workflow metadata-update "${ARGS[@]}" 2>&1 | tee metadata-update.log
           EXIT_CODE=${PIPESTATUS[0]}
           END_TIME=$(date +%s)
           echo "duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
@@ -102,13 +103,36 @@ jobs:
         id: metrics
         run: |
           if [ -f metadata-update.log ]; then
-            ITEMS=$(grep -E '^[[:space:]]+Items:' metadata-update.log | tail -1 | awk -F': ' '{print $NF}' || echo "0")
-            CANDIDATES=$(grep -E '^[[:space:]]+Candidates processed:' metadata-update.log | tail -1 | awk -F': ' '{print $NF}' || echo "0")
-            UPDATED=$(grep -E '^[[:space:]]+Updated:' metadata-update.log | tail -1 | awk -F': ' '{print $NF}' || echo "0")
-            SKIPPED=$(grep -E '^[[:space:]]+Skipped:' metadata-update.log | tail -1 | awk -F': ' '{print $NF}' || echo "0")
-            AI_TAGGED=$(grep -E '^[[:space:]]+AI元数据-tagged \(skipped\):' metadata-update.log | tail -1 | awk -F': ' '{print $NF}' || echo "0")
-            FAILED=$(grep -E '^[[:space:]]+Failed:' metadata-update.log | tail -1 | awk -F': ' '{print $NF}' || echo "0")
-            echo "json={\"Items\":\"${ITEMS}\",\"Candidates processed\":\"${CANDIDATES}\",\"Updated\":\"${UPDATED}\",\"Skipped\":\"${SKIPPED}\",\"AI-tagged (skipped)\":\"${AI_TAGGED}\",\"Failed\":\"${FAILED}\"}" >> $GITHUB_OUTPUT
+          uv run python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          text = Path("metadata-update.log").read_text(encoding="utf-8", errors="ignore")
+          lines = text.splitlines()
+          start = -1
+          for i, line in enumerate(lines):
+              if line.lstrip().startswith("{"):
+                  start = i
+                  break
+          payload = {}
+          if start >= 0:
+              try:
+                  payload = json.loads("\\n".join(lines[start:]))
+              except Exception:
+                  payload = {}
+
+          out = {
+              "Items": str(payload.get("items", payload.get("total", 0))),
+              "Candidates processed": str(payload.get("processed_candidates", 0)),
+              "Updated": str(payload.get("updated", 0)),
+              "Skipped": str(payload.get("skipped", 0)),
+              "AI-tagged (skipped)": str(payload.get("ai_metadata_tagged", 0)),
+              "Failed": str(payload.get("failed", 0)),
+          }
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write("json=" + json.dumps(out, ensure_ascii=False) + "\\n")
+          PY
           else
             echo "json={}" >> $GITHUB_OUTPUT
           fi

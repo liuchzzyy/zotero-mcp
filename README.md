@@ -114,24 +114,40 @@
 
 ## CLI 命令
 
-### 命令总览
-| 命令 | 说明 |
-|------|------|
-| `serve` | 启动 MCP stdio 服务 |
-| `setup` | 配置 zotero-mcp |
-| `semantic-db-update` | 更新语义搜索数据库 |
-| `semantic-db-status` | 查看语义数据库状态 |
-| `semantic-db-inspect` | 检查已索引文档 |
-| `update` | 更新 zotero-mcp 程序 |
-| `scan` | 扫描并分析条目 |
-| `update-metadata` | 批量更新元数据 |
-| `deduplicate` | 检测并删除重复条目 |
-| `clean-empty` | 清理空条目 |
-| `clean-tags` | 清理标签（保留指定前缀） |
-| `version` | 输出版本号 |
-| `setup-info` | 输出安装与配置信息 |
+### 基本格式
 
-### `scan`
+```bash
+zotero-mcp <command> <subcommand> [parameters]
+```
+
+### 顶层命令组
+
+| command | 说明 |
+|------|------|
+| `system` | 系统与运行命令 |
+| `workflow` | 批处理工作流命令 |
+| `semantic` | 语义数据库命令 |
+| `items` | 条目操作 |
+| `notes` | 笔记操作 |
+| `annotations` | 注释操作 |
+| `pdfs` | PDF 附件操作 |
+| `collections` | 集合操作 |
+
+### `system` 子命令
+- `zotero-mcp system serve`
+- `zotero-mcp system setup`
+- `zotero-mcp system setup-info`
+- `zotero-mcp system version`
+- `zotero-mcp system update [--check-only --force --method pip|uv|conda|pipx]`
+
+### `workflow` 子命令
+- `zotero-mcp workflow scan`
+- `zotero-mcp workflow metadata-update`
+- `zotero-mcp workflow deduplicate`
+- `zotero-mcp workflow clean-empty`
+- `zotero-mcp workflow clean-tags`
+
+#### `workflow scan` 常用参数
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `--scan-limit` | `100` | 每批抓取条目数 |
@@ -141,25 +157,14 @@
 | `--llm-provider` | `auto` | `auto/claude-cli/deepseek/openai/gemini` |
 | `--source-collection` | `00_INBOXS` | 优先扫描集合 |
 | `--multimodal` / `--no-multimodal` | `True` | 是否启用多模态 |
+| `--output` | `text` | 输出格式：`text/json` |
 
-### `update-metadata`
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `--collection` | `None` | 限制集合（key） |
-| `--scan-limit` | `500` | 每批抓取条目数 |
-| `--treated-limit` | `None` | 最大处理条目数 |
-| `--item-key` | `None` | 仅更新指定条目 |
-| `--dry-run` | `False` | 预览模式 |
+### `semantic` 子命令
+- `zotero-mcp semantic db-update`
+- `zotero-mcp semantic db-status`
+- `zotero-mcp semantic db-inspect`
 
-### `deduplicate`
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `--collection` | `None` | 限制集合（key） |
-| `--scan-limit` | `500` | 每批抓取条目数 |
-| `--treated-limit` | `100` | 最大扫描条目数 |
-| `--dry-run` | `False` | 预览模式 |
-
-### `semantic-db-update`
+#### `semantic db-update` 常用参数
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `--force-rebuild` | `False` | 强制重建向量库 |
@@ -168,50 +173,39 @@
 | `--no-fulltext` | `False` | 禁用全文提取 |
 | `--config-path` | `None` | 指定语义配置路径 |
 | `--db-path` | `None` | 指定 Zotero DB 路径 |
+| `--output` | `text` | 输出格式：`text/json` |
 
-### `semantic-db-inspect`
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `--limit` | `20` | 输出记录数 |
-| `--filter` | `None` | 按标题/作者过滤 |
-| `--filter-field` | `title` | `doi/title/author` |
-| `--show-documents` | `False` | 显示文档片段 |
-| `--stats` | `False` | 仅输出统计 |
-| `--config-path` | `None` | 指定语义配置路径 |
+### 资源命令组
 
-### `clean-empty`
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `--collection` | `None` | 限制集合（name） |
-| `--scan-limit` | `500` | 每批抓取条目数 |
-| `--treated-limit` | `100` | 最大删除条目数 |
-| `--dry-run` | `False` | 预览模式 |
+| command | subcommand |
+|------|------|
+| `items` | `get/list/children/fulltext/bundle/delete/update/create/add-tags/add-to-collection/remove-from-collection` |
+| `notes` | `list/create/search` |
+| `annotations` | `list` |
+| `pdfs` | `upload` |
+| `collections` | `list/find/create/rename/move/delete/items` |
 
-### `clean-tags`
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `--collection` | `None` | 限制集合（name） |
-| `--batch-size` | `50` | 每批处理条目数 |
-| `--limit` | `None` | 最大处理条目总数 |
-| `--keep-prefix` | `AI` | 保留此前缀标签 |
-| `--dry-run` | `False` | 预览模式 |
+### 示例
 
-### `update`
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `--check-only` | `False` | 仅检查更新 |
-| `--force` | `False` | 强制更新 |
-| `--method` | `None` | `pip/uv/conda/pipx` |
+```bash
+# 扫描并分析
+zotero-mcp workflow scan --target-collection 01_SHORTTERMS --output json
 
-### `setup`
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `--no-local` | `True` | 配置为 Web API 模式 |
-| `--zotero-api-key` | 环境变量 | Zotero API key |
-| `--library-id` | `None` | Zotero library ID |
-| `--library-type` | `user` | `user/group` |
-| `--skip-semantic-search` | `False` | 跳过语义搜索配置 |
-| `--semantic-config-only` | `True` | 仅配置语义搜索 |
+# 更新元数据
+zotero-mcp workflow metadata-update --scan-limit 200 --treated-limit 100
+
+# 查看语义数据库状态
+zotero-mcp semantic db-status --output json
+
+# 获取条目详情
+zotero-mcp items get --item-key ABCD1234 --output json
+
+# 创建笔记
+zotero-mcp notes create --item-key ABCD1234 --content "My note"
+
+# 上传 PDF 附件
+zotero-mcp pdfs upload --item-key ABCD1234 --file ./paper.pdf
+```
 
 ## 环境变量
 
