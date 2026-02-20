@@ -273,6 +273,3 @@ def _apply_theme_styles(html: str, theme: dict[str, str]) -> str:
 
     return styled_html
 
-
-# Alias for compatibility
-beautify_note = beautify_ai_note

@@ -289,7 +289,7 @@ def verify_installation() -> tuple[bool, str]:
 
         # Try to run a basic command
         result = subprocess.run(
-            [sys.executable, "-m", "zotero_mcp.cli", "version"],
+            [sys.executable, "-m", "zotero_mcp", "system", "version"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -433,11 +433,3 @@ def update_zotero_mcp(
 
     return result
 
-
-# Alias for compatibility
-def check_for_updates() -> dict[str, Any]:
-    """Check for updates without installing.
-
-    This is a convenience wrapper that calls update_zotero_mcp with check_only=True.
-    """
-    return update_zotero_mcp(check_only=True)

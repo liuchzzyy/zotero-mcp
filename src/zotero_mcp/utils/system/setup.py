@@ -14,6 +14,7 @@ import sys
 
 from dotenv import load_dotenv
 
+
 def find_executable():
     """Find the full path to the zotero-mcp executable."""
     # Try to find the executable in the PATH
@@ -93,7 +94,7 @@ def setup_semantic_search(
     # Configure update frequency
     print("\n=== Database Update Configuration ===")
     print("Configure how often the semantic search database is updated:")
-    print("1. Manual - Update only when you run 'zotero-mcp semantic-db-update'")
+    print("1. Manual - Update only when you run 'zotero-mcp semantic db-update'")
     print("2. Auto - Automatically update on server startup")
     print("3. Daily - Automatically update once per day")
     print("4. Every N days - Automatically update every N days")
@@ -175,7 +176,8 @@ def setup_semantic_search(
             print(f"Using custom Zotero database: {zotero_db_path}")
         else:
             print(
-                f"Warning: File not found at '{raw_db_path}'. Using auto-detect instead."
+                "Warning: File not found at "
+                f"'{raw_db_path}'. Using auto-detect instead."
             )
     elif default_db_path:
         # Keep existing custom path if user just pressed Enter
@@ -207,7 +209,8 @@ def save_semantic_search_config(config: dict, semantic_config_path: Path) -> boo
                     full_semantic_config = json.load(f)
             except json.JSONDecodeError:
                 print(
-                    "Warning: Existing semantic search config file is invalid JSON, creating new one"
+                    "Warning: Existing semantic search config file is invalid "
+                    "JSON, creating new one"
                 )
 
         # Add semantic search config
@@ -300,7 +303,7 @@ def main(cli_args=None):
     parser.add_argument(
         "--no-local",
         action="store_true",
-        default=True,
+        default=False,
         help="Configure for Zotero Web API instead of local API",
     )
     parser.add_argument(
@@ -325,7 +328,7 @@ def main(cli_args=None):
     parser.add_argument(
         "--semantic-config-only",
         action="store_true",
-        default=True,
+        default=False,
         help="Only configure semantic search, skip Zotero setup",
     )
 
@@ -354,7 +357,9 @@ def main(cli_args=None):
             if save_semantic_search_config(new_semantic_config, semantic_config_path):
                 print("\nSemantic search configuration complete!")
                 print(f"Configuration saved to: {semantic_config_path}")
-                print("\nTo initialize the database, run: zotero-mcp semantic-db-update")
+                print(
+                    "\nTo initialize the database, run: zotero-mcp semantic db-update"
+                )
                 return 0
             else:
                 print("\nSemantic search configuration failed.")
@@ -432,23 +437,26 @@ def main(cli_args=None):
             print("\nClient environment (single-line JSON):")
             print(env_line)
             print(
-                "\nYou can add these to your Opencode CLI config or use them as environment variables."
+                "\nYou can add these to your Opencode CLI config or use them "
+                "as environment variables."
             )
         except Exception:
             pass
 
         if semantic_config_changed:
             print(
-                "\nNote: You changed semantic search settings. Consider rebuilding the DB:"
+                "\nNote: You changed semantic search settings. "
+                "Consider rebuilding the DB:"
             )
-            print("  zotero-mcp semantic-db-update --force-rebuild")
+            print("  zotero-mcp semantic db-update --force-rebuild")
         else:
             print("\nTo initialize the semantic search database, run:")
-            print("  zotero-mcp semantic-db-update")
+            print("  zotero-mcp semantic db-update")
 
         if use_local:
             print(
-                "\nNote: Make sure Zotero desktop is running and the local API is enabled in preferences."
+                "\nNote: Make sure Zotero desktop is running and the local API "
+                "is enabled in preferences."
             )
         else:
             missing = []
@@ -458,7 +466,8 @@ def main(cli_args=None):
                 missing.append("Library ID")
             if missing:
                 print(
-                    f"\nWarning: The following required settings for Web API were not provided: {', '.join(missing)}"
+                    "\nWarning: The following required settings for Web API "
+                    f"were not provided: {', '.join(missing)}"
                 )
                 print(
                     "You may need to set these as environment variables or reconfigure."
@@ -467,11 +476,6 @@ def main(cli_args=None):
     except Exception as e:
         print(f"\nSetup failed with error: {str(e)}")
         return 1
-
-
-# Alias for compatibility
-setup_zotero_mcp = main
-
 
 if __name__ == "__main__":
     sys.exit(main())

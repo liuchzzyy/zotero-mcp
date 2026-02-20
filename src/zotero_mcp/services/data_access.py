@@ -14,17 +14,12 @@ from typing import Any, Literal
 from zotero_mcp.clients.zotero import (
     LocalDatabaseClient,
     ZoteroAPIClient,
-    ZoteroItem,
     get_local_database_client,
     get_zotero_client,
 )
 from zotero_mcp.models.common import SearchResultItem
 from zotero_mcp.services.zotero.item_service import ItemService
 from zotero_mcp.services.zotero.metadata_service import MetadataService
-from zotero_mcp.services.zotero.result_mapper import (
-    api_item_to_search_result,
-    zotero_item_to_search_result,
-)
 from zotero_mcp.services.zotero.search_service import SearchService
 from zotero_mcp.utils.formatting.helpers import is_local_mode
 
@@ -330,17 +325,6 @@ class DataAccessService:
             include_annotations,
             include_notes,
         )
-
-    # -------------------- Helper Methods (Legacy Support) --------------------
-
-    def _api_item_to_result(self, item: dict[str, Any]) -> SearchResultItem:
-        """Convert API item to SearchResultItem."""
-        return api_item_to_search_result(item)
-
-    def _zotero_item_to_result(self, item: ZoteroItem) -> SearchResultItem:
-        """Convert ZoteroItem to SearchResultItem."""
-        return zotero_item_to_search_result(item)
-
 
 @lru_cache(maxsize=1)
 def get_data_service() -> DataAccessService:

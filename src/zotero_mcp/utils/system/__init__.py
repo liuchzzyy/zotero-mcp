@@ -9,8 +9,6 @@ from .errors import (
     ValidationError,
     ZoteroMCPError,
 )
-from .setup import setup_zotero_mcp
-from .updater import check_for_updates
 
 __all__ = [
     # Errors
@@ -21,8 +19,4 @@ __all__ = [
     "ValidationError",
     "DatabaseError",
     "ConfigurationError",
-    # Setup
-    "setup_zotero_mcp",
-    # Updater
-    "check_for_updates",
 ]

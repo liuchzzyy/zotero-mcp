@@ -144,22 +144,3 @@ class ZoteroMapper:
 
         return creators
 
-
-# Convenience function for backward compatibility
-def map_zotero_item(item: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    """
-    Map a Zotero item to document text and metadata.
-
-    This is a convenience function that creates a ZoteroMapper instance
-    and calls both create_document_text and create_metadata.
-
-    Args:
-        item: Zotero item dictionary
-
-    Returns:
-        Tuple of (document_text, metadata)
-    """
-    mapper = ZoteroMapper()
-    document_text = mapper.create_document_text(item)
-    metadata = mapper.create_metadata(item)
-    return document_text, metadata

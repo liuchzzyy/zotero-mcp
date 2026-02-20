@@ -4,12 +4,12 @@ import json
 import subprocess
 import sys
 
-from zotero_mcp.cli import obfuscate_config_for_display
+from zotero_mcp.cli_app.commands.system import obfuscate_config_for_display
 
 
 def test_top_level_help_shows_command_groups():
     result = subprocess.run(
-        [sys.executable, "-m", "zotero_mcp.cli", "--help"],
+        [sys.executable, "-m", "zotero_mcp", "--help"],
         capture_output=True,
         text=True,
     )
@@ -30,7 +30,7 @@ def test_top_level_help_shows_command_groups():
 
 def test_workflow_scan_help_shows_multimodal_flag():
     result = subprocess.run(
-        [sys.executable, "-m", "zotero_mcp.cli", "workflow", "scan", "--help"],
+        [sys.executable, "-m", "zotero_mcp", "workflow", "scan", "--help"],
         capture_output=True,
         text=True,
     )
@@ -43,7 +43,7 @@ def test_workflow_scan_help_shows_multimodal_flag():
 
 def test_items_subcommands_are_exposed():
     result = subprocess.run(
-        [sys.executable, "-m", "zotero_mcp.cli", "items", "--help"],
+        [sys.executable, "-m", "zotero_mcp", "items", "--help"],
         capture_output=True,
         text=True,
     )
@@ -70,7 +70,7 @@ def test_semantic_status_supports_json_output():
         [
             sys.executable,
             "-m",
-            "zotero_mcp.cli",
+            "zotero_mcp",
             "semantic",
             "db-status",
             "--output",

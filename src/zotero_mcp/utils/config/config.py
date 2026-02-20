@@ -253,8 +253,7 @@ def load_config(
         if any(key.startswith(prefix) for prefix in relevant_prefixes):
             env_config[key] = value
 
-    # Apply to os.environ for backward compatibility,
-    # but don't override existing env vars
+    # Expose merged config into process env without overriding existing values.
     for key, value in env_config.items():
         if key not in os.environ:
             os.environ[key] = str(value)
@@ -428,6 +427,3 @@ def get_zotero_mode() -> str:
         return "local"
     return "web"
 
-
-# Alias for compatibility
-get_config = load_config
