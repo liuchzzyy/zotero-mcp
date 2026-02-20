@@ -2,15 +2,11 @@
 Utility functions and helpers for Zotero MCP.
 """
 
-from .config import get_config, get_logger, log_task_end, log_task_start
-from .data import (
-    DEFAULT_ANALYSIS_TEMPLATE_JSON,
-    get_analysis_questions,
-    map_zotero_item,
-)
+from .config import get_logger, log_task_end, log_task_start
+from .data import DEFAULT_ANALYSIS_TEMPLATE_JSON, get_analysis_questions
 from .formatting import (
     DOI_PATTERN,
-    beautify_note,
+    beautify_ai_note,
     clean_html,
     clean_title,
     format_creators,
@@ -25,8 +21,6 @@ from .system import (
     NotFoundError,
     ValidationError,
     ZoteroMCPError,
-    check_for_updates,
-    setup_zotero_mcp,
 )
 
 __all__ = [
@@ -38,19 +32,15 @@ __all__ = [
     "ValidationError",
     "DatabaseError",
     "ConfigurationError",
-    "setup_zotero_mcp",
-    "check_for_updates",
     # Config
-    "get_config",
     "get_logger",
     "log_task_start",
     "log_task_end",
     # Data
-    "map_zotero_item",
     "get_analysis_questions",
     "DEFAULT_ANALYSIS_TEMPLATE_JSON",
     # Formatting
-    "beautify_note",
+    "beautify_ai_note",
     "markdown_to_html",
     "format_creators",
     "clean_title",

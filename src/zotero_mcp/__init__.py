@@ -11,6 +11,4 @@ try:
 except PackageNotFoundError:
     __version__ = "unknown"
 
-from .server import run
-
-__all__ = ["__version__", "run"]
+__all__ = ["__version__"]

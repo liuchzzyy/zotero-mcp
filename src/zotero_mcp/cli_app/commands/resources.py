@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import json
 from pathlib import Path
+from typing import Any, Awaitable, Callable
 
 from zotero_mcp.cli_app.common import add_output_arg
 from zotero_mcp.cli_app.output import emit
@@ -16,6 +17,21 @@ from zotero_mcp.utils.formatting.helpers import normalize_item_key
 def _add_paging(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--limit", type=int, default=25)
     parser.add_argument("--offset", type=int, default=0)
+
+
+def _exit_code(payload: Any) -> int:
+    if not isinstance(payload, dict):
+        return 0
+    if payload.get("error"):
+        return 1
+    if payload.get("success") is False:
+        return 1
+    return 0
+
+
+def _emit_result(args: argparse.Namespace, payload: Any) -> int:
+    emit(args, payload)
+    return _exit_code(payload)
 
 
 def register_items(subparsers: argparse._SubParsersAction) -> None:
@@ -91,64 +107,56 @@ def register_items(subparsers: argparse._SubParsersAction) -> None:
 
 def run_items(args: argparse.Namespace) -> int:
     load_config()
-    from zotero_mcp.services.data_access import DataAccessService
+    from zotero_mcp.services.resource_service import ResourceService
 
-    async def _run() -> dict:
-        svc = DataAccessService()
-        sub = args.subcommand
+    service = ResourceService()
 
-        if sub == "get":
-            return await svc.get_item(normalize_item_key(args.item_key))
-        if sub == "list":
-            results = await svc.get_all_items(
-                limit=args.limit, start=args.offset, item_type=args.item_type
-            )
-            return {"count": len(results), "items": [i.model_dump() for i in results]}
-        if sub == "children":
-            children = await svc.get_item_children(
-                normalize_item_key(args.item_key), item_type=args.item_type
-            )
-            return {"count": len(children), "children": children}
-        if sub == "fulltext":
-            text = await svc.get_fulltext(normalize_item_key(args.item_key))
-            return {"item_key": args.item_key, "fulltext": text}
-        if sub == "bundle":
-            bundle = await svc.get_item_bundle(
-                normalize_item_key(args.item_key),
-                include_fulltext=args.include_fulltext,
-                include_annotations=args.include_annotations,
-                include_notes=args.include_notes,
-            )
-            return bundle
-        if sub == "delete":
-            return await svc.delete_item(normalize_item_key(args.item_key))
-        if sub == "update":
-            with open(args.input_file, encoding="utf-8") as f:
-                payload = json.load(f)
-            return await svc.update_item(payload)
-        if sub == "create":
-            with open(args.input_file, encoding="utf-8") as f:
-                payload = json.load(f)
-            items = payload if isinstance(payload, list) else [payload]
-            return await svc.create_items(items)
-        if sub == "add-tags":
-            return await svc.add_tags_to_item(
-                normalize_item_key(args.item_key), args.tags
-            )
-        if sub == "add-to-collection":
-            return await svc.add_item_to_collection(
-                args.collection_key, normalize_item_key(args.item_key)
-            )
-        if sub == "remove-from-collection":
-            return await svc.remove_item_from_collection(
-                args.collection_key, normalize_item_key(args.item_key)
-            )
+    def _load_json(path: str) -> Any:
+        with open(path, encoding="utf-8") as file:
+            return json.load(file)
 
-        raise ValueError(f"Unknown items subcommand: {sub}")
+    handlers: dict[str, Callable[[], Awaitable[Any]]] = {
+        "get": lambda: service.get_item(normalize_item_key(args.item_key)),
+        "list": lambda: service.list_items(
+            limit=args.limit,
+            offset=args.offset,
+            item_type=args.item_type,
+        ),
+        "children": lambda: service.list_item_children(
+            item_key=normalize_item_key(args.item_key),
+            item_type=args.item_type,
+        ),
+        "fulltext": lambda: service.get_item_fulltext(
+            normalize_item_key(args.item_key)
+        ),
+        "bundle": lambda: service.get_item_bundle(
+            item_key=normalize_item_key(args.item_key),
+            include_fulltext=args.include_fulltext,
+            include_annotations=args.include_annotations,
+            include_notes=args.include_notes,
+        ),
+        "delete": lambda: service.delete_item(normalize_item_key(args.item_key)),
+        "update": lambda: service.update_item(_load_json(args.input_file)),
+        "create": lambda: service.create_items(_load_json(args.input_file)),
+        "add-tags": lambda: service.add_tags_to_item(
+            item_key=normalize_item_key(args.item_key),
+            tags=args.tags,
+        ),
+        "add-to-collection": lambda: service.add_item_to_collection(
+            collection_key=args.collection_key,
+            item_key=normalize_item_key(args.item_key),
+        ),
+        "remove-from-collection": lambda: service.remove_item_from_collection(
+            collection_key=args.collection_key,
+            item_key=normalize_item_key(args.item_key),
+        ),
+    }
 
-    result = asyncio.run(_run())
-    emit(args, result)
-    return 0
+    handler = handlers.get(args.subcommand)
+    if handler is None:
+        raise ValueError(f"Unknown items subcommand: {args.subcommand}")
+
+    return _emit_result(args, asyncio.run(handler()))
 
 
 def register_notes(subparsers: argparse._SubParsersAction) -> None:
@@ -175,64 +183,41 @@ def register_notes(subparsers: argparse._SubParsersAction) -> None:
 
 def run_notes(args: argparse.Namespace) -> int:
     load_config()
-    from zotero_mcp.services.data_access import DataAccessService
+    from zotero_mcp.services.resource_service import ResourceService
 
     if args.subcommand == "create" and bool(args.content) == bool(args.content_file):
         raise ValueError("Provide exactly one of --content or --content-file")
 
-    async def _run() -> dict:
-        svc = DataAccessService()
+    service = ResourceService()
 
-        if args.subcommand == "list":
-            notes = await svc.get_notes(normalize_item_key(args.item_key))
-            total = len(notes)
-            sliced = notes[args.offset : args.offset + args.limit]
-            return {"total": total, "count": len(sliced), "notes": sliced}
+    def _resolve_note_content() -> str:
+        if args.content_file:
+            return Path(args.content_file).read_text(encoding="utf-8")
+        return args.content or ""
 
-        if args.subcommand == "create":
-            content = args.content
-            if args.content_file:
-                content = Path(args.content_file).read_text(encoding="utf-8")
-            return await svc.create_note(
-                parent_key=normalize_item_key(args.item_key),
-                content=content or "",
-                tags=args.tags,
-            )
+    handlers: dict[str, Callable[[], Awaitable[Any]]] = {
+        "list": lambda: service.list_notes(
+            item_key=normalize_item_key(args.item_key),
+            limit=args.limit,
+            offset=args.offset,
+        ),
+        "create": lambda: service.create_note(
+            item_key=normalize_item_key(args.item_key),
+            content=_resolve_note_content(),
+            tags=args.tags,
+        ),
+        "search": lambda: service.search_notes(
+            query=args.query,
+            limit=args.limit,
+            offset=args.offset,
+        ),
+    }
 
-        if args.subcommand == "search":
-            candidates = await svc.search_items(
-                args.query, limit=max(args.limit * 2, 50), offset=0
-            )
-            hits: list[dict] = []
-            query_lower = args.query.lower()
-            for item in candidates:
-                notes = await svc.get_notes(item.key)
-                for note in notes:
-                    data = note.get("data", {})
-                    raw = str(data.get("note", ""))
-                    if query_lower in raw.lower():
-                        hits.append(
-                            {
-                                "item_key": item.key,
-                                "item_title": item.title,
-                                "note_key": data.get("key", ""),
-                                "note": raw,
-                            }
-                        )
-            total = len(hits)
-            sliced = hits[args.offset : args.offset + args.limit]
-            return {
-                "query": args.query,
-                "total": total,
-                "count": len(sliced),
-                "results": sliced,
-            }
-
+    handler = handlers.get(args.subcommand)
+    if handler is None:
         raise ValueError(f"Unknown notes subcommand: {args.subcommand}")
 
-    result = asyncio.run(_run())
-    emit(args, result)
-    return 0
+    return _emit_result(args, asyncio.run(handler()))
 
 
 def register_annotations(subparsers: argparse._SubParsersAction) -> None:
@@ -248,30 +233,18 @@ def register_annotations(subparsers: argparse._SubParsersAction) -> None:
 
 def run_annotations(args: argparse.Namespace) -> int:
     load_config()
-    from zotero_mcp.services.data_access import DataAccessService
+    from zotero_mcp.services.resource_service import ResourceService
 
-    async def _run() -> dict:
-        svc = DataAccessService()
-        annotations = await svc.get_annotations(normalize_item_key(args.item_key))
-        if args.annotation_type != "all":
-            annotations = [
-                a
-                for a in annotations
-                if a.get("data", {}).get("annotationType", "").lower()
-                == args.annotation_type.lower()
-            ]
-        total = len(annotations)
-        sliced = annotations[args.offset : args.offset + args.limit]
-        return {
-            "item_key": args.item_key,
-            "total": total,
-            "count": len(sliced),
-            "annotations": sliced,
-        }
-
-    result = asyncio.run(_run())
-    emit(args, result)
-    return 0
+    service = ResourceService()
+    result = asyncio.run(
+        service.list_annotations(
+            item_key=normalize_item_key(args.item_key),
+            annotation_type=args.annotation_type,
+            limit=args.limit,
+            offset=args.offset,
+        )
+    )
+    return _emit_result(args, result)
 
 
 def register_pdfs(subparsers: argparse._SubParsersAction) -> None:
@@ -287,19 +260,17 @@ def register_pdfs(subparsers: argparse._SubParsersAction) -> None:
 
 def run_pdfs(args: argparse.Namespace) -> int:
     load_config()
-    from zotero_mcp.services.data_access import DataAccessService
+    from zotero_mcp.services.resource_service import ResourceService
 
-    async def _run() -> dict:
-        svc = DataAccessService()
-        return await svc.item_service.upload_attachment(
-            parent_key=normalize_item_key(args.item_key),
+    service = ResourceService()
+    result = asyncio.run(
+        service.upload_attachment(
+            item_key=normalize_item_key(args.item_key),
             file_path=args.file,
             title=args.title,
         )
-
-    result = asyncio.run(_run())
-    emit(args, result)
-    return 0
+    )
+    return _emit_result(args, result)
 
 
 def register_collections(subparsers: argparse._SubParsersAction) -> None:
@@ -341,50 +312,36 @@ def register_collections(subparsers: argparse._SubParsersAction) -> None:
 
 def run_collections(args: argparse.Namespace) -> int:
     load_config()
-    from zotero_mcp.services.data_access import DataAccessService
+    from zotero_mcp.services.resource_service import ResourceService
 
-    async def _run() -> dict:
-        svc = DataAccessService()
-        sub = args.subcommand
+    service = ResourceService()
+    handlers: dict[str, Callable[[], Awaitable[Any]]] = {
+        "list": service.list_collections,
+        "find": lambda: service.find_collections(name=args.name, exact=args.exact),
+        "create": lambda: service.create_collection(
+            name=args.name, parent_key=args.parent_key
+        ),
+        "rename": lambda: service.rename_collection(
+            collection_key=args.collection_key,
+            name=args.name,
+        ),
+        "move": lambda: service.move_collection(
+            collection_key=args.collection_key,
+            parent_key=args.parent_key,
+        ),
+        "delete": lambda: service.delete_collection(args.collection_key),
+        "items": lambda: service.list_collection_items(
+            collection_key=args.collection_key,
+            limit=args.limit,
+            offset=args.offset,
+        ),
+    }
 
-        if sub == "list":
-            collections = await svc.get_collections()
-            return {"count": len(collections), "collections": collections}
-        if sub == "find":
-            matches = await svc.find_collection_by_name(
-                args.name, exact_match=args.exact
-            )
-            return {"count": len(matches), "collections": matches}
-        if sub == "create":
-            return await svc.create_collection(args.name, parent_key=args.parent_key)
-        if sub == "rename":
-            await svc.update_collection(args.collection_key, name=args.name)
-            return {
-                "updated": True,
-                "collection_key": args.collection_key,
-                "name": args.name,
-            }
-        if sub == "move":
-            await svc.update_collection(args.collection_key, parent_key=args.parent_key)
-            return {
-                "updated": True,
-                "collection_key": args.collection_key,
-                "parent_key": args.parent_key,
-            }
-        if sub == "delete":
-            await svc.delete_collection(args.collection_key)
-            return {"deleted": True, "collection_key": args.collection_key}
-        if sub == "items":
-            results = await svc.get_collection_items(
-                args.collection_key, limit=args.limit, start=args.offset
-            )
-            return {"count": len(results), "items": [i.model_dump() for i in results]}
+    handler = handlers.get(args.subcommand)
+    if handler is None:
+        raise ValueError(f"Unknown collections subcommand: {args.subcommand}")
 
-        raise ValueError(f"Unknown collections subcommand: {sub}")
-
-    result = asyncio.run(_run())
-    emit(args, result)
-    return 0
+    return _emit_result(args, asyncio.run(handler()))
 
 
 __all__ = [

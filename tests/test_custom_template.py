@@ -111,6 +111,14 @@ async def test_workflow_service_propagates_template():
         )
 
         # Verify
-        mock_llm_client.analyze_paper.assert_called_once()
-        call_kwargs = mock_llm_client.analyze_paper.call_args.kwargs
-        assert call_kwargs["template"] == "CUSTOM_TEMPLATE_CONTENT"
+        # Workflow may retry when structured output quality is too low.
+        assert mock_llm_client.analyze_paper.call_count >= 1
+
+        call_kwargs_list = [
+            call.kwargs for call in mock_llm_client.analyze_paper.call_args_list
+        ]
+        assert call_kwargs_list[0]["template"] == "CUSTOM_TEMPLATE_CONTENT"
+        assert all(
+            "CUSTOM_TEMPLATE_CONTENT" in kwargs["template"]
+            for kwargs in call_kwargs_list
+        )

@@ -57,7 +57,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     setup.add_argument(
         "--no-local",
         action="store_true",
-        default=True,
+        default=False,
         help="Configure for Zotero Web API instead of local API",
     )
     setup.add_argument("--zotero-api-key", help="Zotero API key")
@@ -76,7 +76,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     setup.add_argument(
         "--semantic-config-only",
         action="store_true",
-        default=True,
+        default=False,
         help="Only configure semantic search",
     )
 
@@ -145,10 +145,11 @@ def run(args: argparse.Namespace) -> int:
         return 0
 
     if sub == "update":
-        update_zotero_mcp(
+        result = update_zotero_mcp(
             check_only=args.check_only, force=args.force, method=args.method
         )
-        return 0
+        emit(args, result)
+        return 0 if result.get("success") else 1
 
     raise ValueError(f"Unknown system subcommand: {sub}")
 

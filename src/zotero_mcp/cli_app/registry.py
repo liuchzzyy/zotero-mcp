@@ -3,43 +3,47 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 
 from zotero_mcp.cli_app.commands import resources, semantic, system, workflow
+
+
+CommandRunner = Callable[[argparse.Namespace], int]
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Zotero Model Context Protocol server")
     subparsers = parser.add_subparsers(dest="command")
 
-    system.register(subparsers)
-    workflow.register(subparsers)
-    semantic.register(subparsers)
-    resources.register_items(subparsers)
-    resources.register_notes(subparsers)
-    resources.register_annotations(subparsers)
-    resources.register_pdfs(subparsers)
-    resources.register_collections(subparsers)
+    registrars: tuple[Callable[[argparse._SubParsersAction], None], ...] = (
+        system.register,
+        workflow.register,
+        semantic.register,
+        resources.register_items,
+        resources.register_notes,
+        resources.register_annotations,
+        resources.register_pdfs,
+        resources.register_collections,
+    )
+    for register in registrars:
+        register(subparsers)
 
     return parser
 
 
 def dispatch(args: argparse.Namespace) -> int:
-    command = args.command
-    if command == "system":
-        return system.run(args)
-    if command == "workflow":
-        return workflow.run(args)
-    if command == "semantic":
-        return semantic.run(args)
-    if command == "items":
-        return resources.run_items(args)
-    if command == "notes":
-        return resources.run_notes(args)
-    if command == "annotations":
-        return resources.run_annotations(args)
-    if command == "pdfs":
-        return resources.run_pdfs(args)
-    if command == "collections":
-        return resources.run_collections(args)
+    command_handlers: dict[str, CommandRunner] = {
+        "system": system.run,
+        "workflow": workflow.run,
+        "semantic": semantic.run,
+        "items": resources.run_items,
+        "notes": resources.run_notes,
+        "annotations": resources.run_annotations,
+        "pdfs": resources.run_pdfs,
+        "collections": resources.run_collections,
+    }
 
-    raise ValueError(f"Unknown command: {command}")
+    handler = command_handlers.get(args.command)
+    if handler is None:
+        raise ValueError(f"Unknown command: {args.command}")
+    return handler(args)

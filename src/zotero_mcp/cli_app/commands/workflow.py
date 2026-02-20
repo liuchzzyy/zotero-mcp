@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from typing import Any
 
 from zotero_mcp.cli_app.common import (
     add_output_arg,
@@ -128,253 +129,110 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     add_output_arg(clean_tags)
 
 
+async def _run_scan(args: argparse.Namespace) -> dict[str, Any]:
+    from zotero_mcp.services.scanner import GlobalScanner
+
+    scanner = GlobalScanner()
+    return await scanner.scan_and_process(
+        scan_limit=args.scan_limit,
+        treated_limit=args.treated_limit,
+        target_collection=args.target_collection,
+        dry_run=args.dry_run,
+        llm_provider=args.llm_provider,
+        source_collection=args.source_collection,
+        include_multimodal=args.multimodal,
+    )
+
+
+async def _run_metadata_update(args: argparse.Namespace) -> dict[str, Any]:
+    from zotero_mcp.services.data_access import DataAccessService
+    from zotero_mcp.services.zotero.metadata_update_service import MetadataUpdateService
+
+    data_service = DataAccessService()
+    update_service = MetadataUpdateService(
+        data_service.item_service,
+        data_service.metadata_service,
+    )
+    if args.item_key:
+        return await update_service.update_item_metadata(
+            args.item_key,
+            dry_run=args.dry_run,
+        )
+    return await update_service.update_all_items(
+        collection_key=args.collection,
+        scan_limit=args.scan_limit,
+        treated_limit=args.treated_limit,
+        dry_run=args.dry_run,
+    )
+
+
+async def _run_deduplicate(args: argparse.Namespace) -> dict[str, Any]:
+    from zotero_mcp.services.data_access import DataAccessService
+    from zotero_mcp.services.zotero.duplicate_service import DuplicateDetectionService
+
+    data_service = DataAccessService()
+    service = DuplicateDetectionService(data_service.item_service)
+    return await service.find_and_remove_duplicates(
+        collection_key=args.collection,
+        scan_limit=args.scan_limit,
+        treated_limit=args.treated_limit,
+        dry_run=args.dry_run,
+    )
+
+
+async def _run_clean_empty(args: argparse.Namespace) -> dict[str, Any]:
+    from zotero_mcp.services.zotero.maintenance_service import LibraryMaintenanceService
+
+    service = LibraryMaintenanceService()
+    return await service.clean_empty_items(
+        collection_name=args.collection,
+        scan_limit=args.scan_limit,
+        treated_limit=args.treated_limit,
+        dry_run=args.dry_run,
+    )
+
+
+async def _run_clean_tags(args: argparse.Namespace) -> dict[str, Any]:
+    from zotero_mcp.services.zotero.maintenance_service import LibraryMaintenanceService
+
+    service = LibraryMaintenanceService()
+    return await service.clean_tags(
+        collection_name=args.collection,
+        batch_size=args.batch_size,
+        limit=args.limit,
+        keep_prefix=args.keep_prefix,
+        dry_run=args.dry_run,
+    )
+
+
+def _exit_code(result: dict[str, Any]) -> int:
+    if result.get("error"):
+        return 1
+    success = result.get("success")
+    if success is False:
+        return 1
+    return 0
+
+
 def run(args: argparse.Namespace) -> int:
     load_config()
-    sub = args.subcommand
 
-    if sub == "scan":
-        from zotero_mcp.services.scanner import GlobalScanner
+    handlers = {
+        "scan": _run_scan,
+        "metadata-update": _run_metadata_update,
+        "deduplicate": _run_deduplicate,
+        "clean-empty": _run_clean_empty,
+        "clean-tags": _run_clean_tags,
+    }
 
-        scanner = GlobalScanner()
-        result = asyncio.run(
-            scanner.scan_and_process(
-                scan_limit=args.scan_limit,
-                treated_limit=args.treated_limit,
-                target_collection=args.target_collection,
-                dry_run=args.dry_run,
-                llm_provider=args.llm_provider,
-                source_collection=args.source_collection,
-                include_multimodal=args.multimodal,
-            )
-        )
-        emit(args, result)
-        return 1 if result.get("error") else 0
+    handler = handlers.get(args.subcommand)
+    if handler is None:
+        print(f"Unknown workflow subcommand: {args.subcommand}", file=sys.stderr)
+        return 1
 
-    if sub == "metadata-update":
-        from zotero_mcp.services.data_access import DataAccessService
-        from zotero_mcp.services.zotero.metadata_update_service import (
-            MetadataUpdateService,
-        )
-
-        async def _run() -> dict:
-            data_service = DataAccessService()
-            update_service = MetadataUpdateService(
-                data_service.item_service, data_service.metadata_service
-            )
-            if args.item_key:
-                return await update_service.update_item_metadata(
-                    args.item_key, dry_run=args.dry_run
-                )
-            return await update_service.update_all_items(
-                collection_key=args.collection,
-                scan_limit=args.scan_limit,
-                treated_limit=args.treated_limit,
-                dry_run=args.dry_run,
-            )
-
-        result = asyncio.run(_run())
-        emit(args, result)
-        return 0
-
-    if sub == "deduplicate":
-        from zotero_mcp.services.data_access import DataAccessService
-        from zotero_mcp.services.zotero.duplicate_service import (
-            DuplicateDetectionService,
-        )
-
-        async def _run() -> dict:
-            data_service = DataAccessService()
-            service = DuplicateDetectionService(data_service.item_service)
-            return await service.find_and_remove_duplicates(
-                collection_key=args.collection,
-                scan_limit=args.scan_limit,
-                treated_limit=args.treated_limit,
-                dry_run=args.dry_run,
-            )
-
-        result = asyncio.run(_run())
-        emit(args, result)
-        return 0
-
-    if sub == "clean-empty":
-        from zotero_mcp.services.data_access import DataAccessService
-
-        async def _run() -> dict:
-            data_service = DataAccessService()
-            if args.collection:
-                matches = await data_service.find_collection_by_name(
-                    args.collection, exact_match=True
-                )
-                if not matches:
-                    return {"error": f"Collection not found: {args.collection}"}
-                collections = matches
-            else:
-                collections = await data_service.get_collections()
-
-            candidates: list[tuple[str, str, str]] = []
-            total_scanned = 0
-
-            for col in collections:
-                col_key = col.get("key", "")
-                col_name = col.get("data", {}).get("name", col.get("name", "Unknown"))
-                offset = 0
-
-                while len(candidates) < args.treated_limit:
-                    items = await data_service.get_collection_items(
-                        col_key, limit=args.scan_limit, start=offset
-                    )
-                    if not items:
-                        break
-                    for item in items:
-                        total_scanned += 1
-                        if item.item_type in ("attachment", "note"):
-                            continue
-                        title = item.title or ""
-                        if title.strip() and title.strip() != "Untitled":
-                            continue
-                        try:
-                            children = await data_service.get_item_children(item.key)
-                        except Exception:
-                            continue
-                        if children:
-                            continue
-                        candidates.append((item.key, title or "(empty)", col_name))
-                        if len(candidates) >= args.treated_limit:
-                            break
-                    if len(items) < args.scan_limit:
-                        break
-                    offset += args.scan_limit
-                if len(candidates) >= args.treated_limit:
-                    break
-
-            if args.dry_run:
-                return {
-                    "total_scanned": total_scanned,
-                    "empty_items_found": len(candidates),
-                    "candidates": [
-                        {"key": key, "title": title, "collection": col_name}
-                        for key, title, col_name in candidates
-                    ],
-                    "dry_run": True,
-                }
-
-            deleted = 0
-            failed = 0
-            failures: list[dict[str, str]] = []
-            for key, _, _ in candidates:
-                try:
-                    await data_service.delete_item(key)
-                    deleted += 1
-                except Exception as exc:
-                    failed += 1
-                    failures.append({"key": key, "error": str(exc)})
-
-            return {
-                "total_scanned": total_scanned,
-                "empty_items_found": len(candidates),
-                "deleted": deleted,
-                "failed": failed,
-                "failures": failures,
-            }
-
-        result = asyncio.run(_run())
-        emit(args, result)
-        return 1 if result.get("error") else 0
-
-    if sub == "clean-tags":
-        from zotero_mcp.clients.zotero.api_client import get_zotero_client
-        from zotero_mcp.services.data_access import DataAccessService
-
-        async def _run() -> dict:
-            api_client = get_zotero_client()
-            data_service = DataAccessService()
-
-            if args.collection:
-                matches = await data_service.find_collection_by_name(
-                    args.collection, exact_match=True
-                )
-                if not matches:
-                    return {"error": f"Collection not found: {args.collection}"}
-                collections = matches
-            else:
-                collections = await data_service.get_collections()
-
-            keep_prefix = args.keep_prefix
-            items_updated: list[dict] = []
-            total_scanned = 0
-            total_tags_removed = 0
-            limit = args.limit
-
-            for col in collections:
-                if limit and len(items_updated) >= limit:
-                    break
-                col_key = col.get("key", "")
-                col_name = col.get("data", {}).get("name", col.get("name", "Unknown"))
-                offset = 0
-                while limit is None or len(items_updated) < limit:
-                    remaining = limit - len(items_updated) if limit else args.batch_size
-                    batch_size = min(args.batch_size, remaining)
-                    items = await data_service.get_collection_items(
-                        col_key, limit=batch_size, start=offset
-                    )
-                    if not items:
-                        break
-
-                    for item in items:
-                        total_scanned += 1
-                        full_item = await api_client.get_item(item.key)
-                        item_data = full_item.get("data", {})
-                        existing_tags = item_data.get("tags", [])
-                        kept_tags = [
-                            t
-                            for t in existing_tags
-                            if isinstance(t, dict)
-                            and t.get("tag", "").startswith(keep_prefix)
-                        ]
-                        removed_tags = [
-                            t
-                            for t in existing_tags
-                            if isinstance(t, dict)
-                            and not t.get("tag", "").startswith(keep_prefix)
-                        ]
-                        if removed_tags:
-                            removed_count = len(removed_tags)
-                            total_tags_removed += removed_count
-                            items_updated.append(
-                                {
-                                    "item_key": item.key,
-                                    "title": item.title or "(no title)",
-                                    "collection": col_name,
-                                    "kept": len(kept_tags),
-                                    "removed": removed_count,
-                                }
-                            )
-                            if not args.dry_run:
-                                full_item["data"]["tags"] = kept_tags
-                                await api_client.update_item(full_item)
-
-                        if limit and len(items_updated) >= limit:
-                            break
-
-                    if len(items) < batch_size:
-                        break
-                    offset += batch_size
-
-            return {
-                "keep_prefix": keep_prefix,
-                "total_items_scanned": total_scanned,
-                "items_updated": len(items_updated),
-                "total_tags_removed": total_tags_removed,
-                "details": items_updated,
-                "dry_run": args.dry_run,
-            }
-
-        result = asyncio.run(_run())
-        emit(args, result)
-        return 1 if result.get("error") else 0
-
-    print(f"Unknown workflow subcommand: {sub}", file=sys.stderr)
-    return 1
+    result = asyncio.run(handler(args))
+    emit(args, result)
+    return _exit_code(result)
 
 
 __all__ = ["register", "run"]
