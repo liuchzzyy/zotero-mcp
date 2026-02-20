@@ -69,10 +69,11 @@ jobs:
           if [ "$INPUT_DRY_RUN" = "true" ]; then
             ARGS+=(--dry-run)
           fi
+          ARGS+=(--output json)
 
-          echo "Command: zotero-mcp deduplicate ${ARGS[*]}"
+          echo "Command: zotero-mcp workflow deduplicate ${ARGS[*]}"
           START_TIME=$(date +%s)
-          uv run zotero-mcp deduplicate "${ARGS[@]}" 2>&1 | tee dedup.log
+          uv run zotero-mcp workflow deduplicate "${ARGS[@]}" 2>&1 | tee dedup.log
           EXIT_CODE=${PIPESTATUS[0]}
           END_TIME=$(date +%s)
           echo "duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
@@ -93,11 +94,34 @@ jobs:
         id: metrics
         run: |
           if [ -f dedup.log ]; then
-            SCANNED=$(grep -oE '(Total scanned|Scanned): [0-9]+' dedup.log | tail -1 | grep -oE '[0-9]+' || echo "0")
-            DUPLICATES=$(grep -oE 'Duplicates found: [0-9]+' dedup.log | tail -1 | grep -oE '[0-9]+' || echo "0")
-            DELETED=$(grep -oE '(Duplicates deleted|Deleted): [0-9]+' dedup.log | tail -1 | awk -F': ' '{print $NF}' || echo "0")
-            CROSS_FOLDER=$(grep -oE 'Cross-folder copies \(skipped\): [0-9]+' dedup.log | tail -1 | grep -oE '[0-9]+' || echo "0")
-            echo "json={\"Scanned\":\"${SCANNED}\",\"Duplicates found\":\"${DUPLICATES}\",\"Deleted\":\"${DELETED}\",\"Cross-folder copies (skipped)\":\"${CROSS_FOLDER}\"}" >> $GITHUB_OUTPUT
+          uv run python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          text = Path("dedup.log").read_text(encoding="utf-8", errors="ignore")
+          lines = text.splitlines()
+          start = -1
+          for i, line in enumerate(lines):
+              if line.lstrip().startswith("{"):
+                  start = i
+                  break
+          payload = {}
+          if start >= 0:
+              try:
+                  payload = json.loads("\\n".join(lines[start:]))
+              except Exception:
+                  payload = {}
+
+          out = {
+              "Scanned": str(payload.get("total_scanned", 0)),
+              "Duplicates found": str(payload.get("duplicates_found", 0)),
+              "Deleted": str(payload.get("duplicates_removed", 0)),
+              "Cross-folder copies (skipped)": str(payload.get("cross_folder_copies", 0)),
+          }
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write("json=" + json.dumps(out, ensure_ascii=False) + "\\n")
+          PY
           else
             echo "json={}" >> $GITHUB_OUTPUT
           fi

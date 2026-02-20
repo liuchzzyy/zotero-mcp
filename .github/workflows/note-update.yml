@@ -97,10 +97,11 @@ jobs:
           if [ "$INPUT_DRY_RUN" = "true" ]; then
             ARGS+=(--dry-run)
           fi
+          ARGS+=(--output json)
 
-          echo "Command: zotero-mcp scan ${ARGS[*]}"
+          echo "Command: zotero-mcp workflow scan ${ARGS[*]}"
           START_TIME=$(date +%s)
-          uv run zotero-mcp scan "${ARGS[@]}" 2>&1 | tee scan-output.log
+          uv run zotero-mcp workflow scan "${ARGS[@]}" 2>&1 | tee scan-output.log
           EXIT_CODE=${PIPESTATUS[0]}
           END_TIME=$(date +%s)
           echo "duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
@@ -121,12 +122,36 @@ jobs:
         id: metrics
         run: |
           if [ -f scan-output.log ]; then
-            TOTAL_SCANNED=$(grep -E '^[[:space:]]+Total scanned:' scan-output.log | tail -1 | awk -F': ' '{print $NF}' || echo "0")
-            CANDIDATES=$(grep -E '^[[:space:]]+Candidates:' scan-output.log | tail -1 | awk -F': ' '{print $NF}' || echo "0")
-            PROCESSED=$(grep -E '^[[:space:]]+Processed:' scan-output.log | tail -1 | awk -F': ' '{print $NF}' || echo "0")
-            FAILED=$(grep -E '^[[:space:]]+Failed:' scan-output.log | tail -1 | awk -F': ' '{print $NF}' || echo "0")
-            SKIPPED_NO_FULLTEXT=$(grep -oE 'skipped_no_fulltext [0-9]+' scan-output.log | tail -1 | awk '{print $2}' || echo "0")
-            echo "json={\"Total scanned\":\"${TOTAL_SCANNED}\",\"Candidates\":\"${CANDIDATES}\",\"Processed\":\"${PROCESSED}\",\"Failed\":\"${FAILED}\",\"Skipped(no fulltext)\":\"${SKIPPED_NO_FULLTEXT}\"}" >> $GITHUB_OUTPUT
+          uv run python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          text = Path("scan-output.log").read_text(encoding="utf-8", errors="ignore")
+          lines = text.splitlines()
+          start = -1
+          for i, line in enumerate(lines):
+              if line.lstrip().startswith("{"):
+                  start = i
+                  break
+          payload = {}
+          if start >= 0:
+              try:
+                  payload = json.loads("\\n".join(lines[start:]))
+              except Exception:
+                  payload = {}
+
+          metrics = payload.get("metrics", {}) if isinstance(payload, dict) else {}
+          out = {
+              "Total scanned": str(payload.get("total_scanned", 0)),
+              "Candidates": str(payload.get("candidates", 0)),
+              "Processed": str(payload.get("processed", 0)),
+              "Failed": str(payload.get("failed", 0)),
+              "Skipped(no fulltext)": str(metrics.get("skipped_no_fulltext", 0)),
+          }
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write("json=" + json.dumps(out, ensure_ascii=False) + "\\n")
+          PY
           else
             echo "json={}" >> $GITHUB_OUTPUT
           fi
