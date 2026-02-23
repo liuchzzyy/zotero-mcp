@@ -6,6 +6,7 @@ with checkpoint support for resuming interrupted workflows.
 """
 
 from collections.abc import Callable
+import os
 import time
 from typing import Any, Literal
 
@@ -38,6 +39,31 @@ logger = get_logger(__name__)
 
 
 # -------------------- Workflow Service --------------------
+
+
+def _resolve_runtime_template(template: str | None, use_structured: bool) -> str:
+    """
+    Resolve analysis template with runtime priority.
+
+    Priority:
+    1. Explicit function parameter `template`
+    2. .env `ANALYSIS_TEMPLATE` (non-empty and not literal "none")
+    3. Built-in default (structured JSON template if use_structured=True)
+    """
+    if template is not None:
+        return template
+
+    env_template = os.getenv("ANALYSIS_TEMPLATE")
+    if env_template is not None:
+        normalized = env_template.strip()
+        if normalized and normalized.lower() != "none":
+            return env_template
+
+    if use_structured:
+        return DEFAULT_ANALYSIS_TEMPLATE_JSON
+
+    # Empty string lets downstream LLM clients fall back to their own defaults.
+    return ""
 
 
 class WorkflowService:
@@ -509,10 +535,7 @@ class WorkflowService:
                 images_to_send = context["images"]
 
             # 4. Call LLM
-            if use_structured and template is None:
-                template = DEFAULT_ANALYSIS_TEMPLATE_JSON
-            elif template is None:
-                template = ""
+            template = _resolve_runtime_template(template, use_structured)
             analysis_content = await self._call_llm_analysis(
                 item=item,
                 llm_client=llm_client,

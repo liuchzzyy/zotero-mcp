@@ -6,6 +6,7 @@ import pytest
 
 from zotero_mcp.models.workflow import AnalysisItem
 from zotero_mcp.services.workflow import WorkflowService
+from zotero_mcp.utils.data.templates import DEFAULT_ANALYSIS_TEMPLATE_JSON
 
 
 @pytest.fixture
@@ -610,6 +611,88 @@ async def test_structured_quality_recovers_within_retry_limit(workflow_service):
 
     assert result is not None
     assert workflow_service._call_llm_analysis.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_analyze_single_item_prefers_env_template_when_template_none(
+    workflow_service, monkeypatch
+):
+    item = MagicMock()
+    item.key = "ITEM1"
+    item.title = "Paper"
+    item.authors = "Author"
+    item.date = "2026"
+    item.doi = "10.1/test"
+
+    bundle = {
+        "metadata": {"data": {"publicationTitle": "Journal"}},
+        "fulltext": "text",
+        "annotations": [],
+        "notes": [],
+        "multimodal": {"images": [], "tables": []},
+    }
+    llm_client = AsyncMock()
+    llm_client.provider = "deepseek"
+
+    monkeypatch.setenv("ANALYSIS_TEMPLATE", "ENV_TEMPLATE_CONTENT")
+    workflow_service._call_llm_analysis = AsyncMock(return_value="analysis")
+    workflow_service._ensure_structured_quality = AsyncMock(return_value="analysis")
+
+    result = await workflow_service._analyze_single_item(
+        item=item,
+        bundle=bundle,
+        llm_client=llm_client,
+        skip_existing=True,
+        template=None,
+        dry_run=True,
+        use_structured=True,
+        include_multimodal=False,
+    )
+
+    assert result.success is True
+    call_kwargs = workflow_service._call_llm_analysis.await_args.kwargs
+    assert call_kwargs["template"] == "ENV_TEMPLATE_CONTENT"
+
+
+@pytest.mark.asyncio
+async def test_analyze_single_item_falls_back_to_default_when_env_template_empty(
+    workflow_service, monkeypatch
+):
+    item = MagicMock()
+    item.key = "ITEM2"
+    item.title = "Paper"
+    item.authors = "Author"
+    item.date = "2026"
+    item.doi = "10.1/test"
+
+    bundle = {
+        "metadata": {"data": {"publicationTitle": "Journal"}},
+        "fulltext": "text",
+        "annotations": [],
+        "notes": [],
+        "multimodal": {"images": [], "tables": []},
+    }
+    llm_client = AsyncMock()
+    llm_client.provider = "deepseek"
+
+    monkeypatch.setenv("ANALYSIS_TEMPLATE", "")
+    workflow_service._call_llm_analysis = AsyncMock(return_value="analysis")
+    workflow_service._ensure_structured_quality = AsyncMock(return_value="analysis")
+
+    result = await workflow_service._analyze_single_item(
+        item=item,
+        bundle=bundle,
+        llm_client=llm_client,
+        skip_existing=True,
+        template=None,
+        dry_run=True,
+        use_structured=True,
+        include_multimodal=False,
+    )
+
+    assert result.success is True
+    call_kwargs = workflow_service._call_llm_analysis.await_args.kwargs
+    assert call_kwargs["template"] == DEFAULT_ANALYSIS_TEMPLATE_JSON
 
 
 @pytest.mark.asyncio
