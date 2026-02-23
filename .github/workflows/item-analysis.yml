@@ -17,7 +17,7 @@ on:
         required: false
         default: "20"
         type: choice
-        options: ["1", "10", "20", "50"]
+        options: ["1", "10", "20", "30", "50"]
       source_collection:
         description: "Collection scanned with highest priority"
         required: false
