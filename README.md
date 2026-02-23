@@ -2,41 +2,31 @@
 
 连接 AI 助手与 Zotero 研究库的 Model Context Protocol 服务器。
 
+开发者规范与仓库协作约定见 `AGENTS.md`。
+
 ## 业务逻辑框架
 
-```
-┌───────────────────────────────────────────────────────────
-│                   Entry Layer                             
-│  ├── server.py (MCP stdio server)                         
-│  └── cli.py (CLI)                                         
-├───────────────────────────────────────────────────────────
-│                   Handlers Layer                          
-│  ├── annotations.py  (PDF 注释工具)                        
-│  ├── batch.py        (批量操作工具)                        
-│  ├── collections.py  (集合管理工具)                        
-│  ├── database.py     (语义搜索工具)                        
-│  ├── items.py        (条目 CRUD 工具)                      
-│  ├── search.py       (搜索工具)                            
-│  └── workflow.py     (批量分析工作流工具)                   
-├───────────────────────────────────────────────────────────
-│                  Services Layer                           
-│  ├── zotero/                                              
-│  │   ├── ItemService         (CRUD 操作)                  
-│  │   ├── SearchService        (关键词/语义搜索)            
-│  │   ├── MetadataService      (DOI/元数据补全)             
-│  │   ├── MetadataUpdateService (条目元数据更新)            
-│  │   ├── SemanticSearch       (ChromaDB 向量搜索)          
-│  │   └── DuplicateService      (去重)                     
-│  ├── workflow.py      (批量分析 + 检查点)                 
-│  └── data_access.py  (本地 DB / Zotero API 门面)           
-├──────────────────────────────────────────────────────────
-│                  Clients Layer                        
-│  ├── zotero/          (Zotero API + 本地 DB)                      
-│  ├── database/        (ChromaDB 向量数据库)                     
-│  ├── metadata/        (Crossref + OpenAlex APIs)                 
-│  └── llm/            (DeepSeek/OpenAI/Gemini/Claude CLI)        
-└──────────────────────────────────────────────────────────
-```
+### 入口层
+- MCP 入口：`src/zotero_mcp/server.py`
+- CLI 入口：`src/zotero_mcp/cli_app/main.py`
+- 解析与分发：`src/zotero_mcp/cli_app/registry.py`
+
+### 处理层（Handlers）
+- `src/zotero_mcp/handlers/tools.py`
+- `src/zotero_mcp/handlers/prompts.py`
+
+### 服务层（Services）
+- `src/zotero_mcp/services/data_access.py`（统一数据访问门面）
+- `src/zotero_mcp/services/scanner.py`（批量扫描与分析）
+- `src/zotero_mcp/services/zotero/metadata_update_service.py`（元数据补全）
+- `src/zotero_mcp/services/zotero/duplicate_service.py`（去重）
+- `src/zotero_mcp/services/zotero/semantic_search.py`（语义搜索）
+
+### 客户端层（Clients）
+- `src/zotero_mcp/clients/zotero/`
+- `src/zotero_mcp/clients/database/`
+- `src/zotero_mcp/clients/metadata/`
+- `src/zotero_mcp/clients/llm/`
 
 ## 核心服务
 
@@ -127,6 +117,7 @@ zotero-mcp <command> <subcommand> [parameters]
 | `system` | 系统与运行命令 |
 | `workflow` | 批处理工作流命令 |
 | `semantic` | 语义数据库命令 |
+| `tags` | 标签操作 |
 | `items` | 条目操作 |
 | `notes` | 笔记操作 |
 | `annotations` | 注释操作 |
@@ -154,7 +145,6 @@ zotero-mcp <command> <subcommand> [parameters]
 | `--dry-run` | `False` | 预览模式 |
 | `--llm-provider` | `auto` | `auto/claude-cli/deepseek/openai/gemini` |
 | `--source-collection` | `00_INBOXS` | 优先扫描集合 |
-| `--multimodal` / `--no-multimodal` | `True` | 是否启用多模态 |
 | `--output` | `text` | 输出格式：`text/json` |
 
 ### `semantic` 子命令
@@ -171,6 +161,7 @@ zotero-mcp <command> <subcommand> [parameters]
 | `--no-fulltext` | `False` | 禁用全文提取 |
 | `--config-path` | `None` | 指定语义配置路径 |
 | `--db-path` | `None` | 指定 Zotero DB 路径 |
+| `--local` / `--no-local` | `True` | 是否使用本地 Zotero DB/API 模式 |
 | `--output` | `text` | 输出格式：`text/json` |
 
 ### 资源命令组
