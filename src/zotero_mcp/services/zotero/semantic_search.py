@@ -314,7 +314,12 @@ class ZoteroSemanticSearch:
                     }
 
                     if item.notes:
+                        api_item["data"]["note"] = item.notes
                         api_item["data"]["notes"] = item.notes
+                    if item.tags:
+                        api_item["data"]["tags"] = [{"tag": tag} for tag in item.tags]
+                    if item.annotations:
+                        api_item["data"]["annotations"] = item.annotations
 
                     api_items.append(api_item)
 
@@ -461,12 +466,7 @@ class ZoteroSemanticSearch:
                     stats["skipped"] += 1
                     continue
 
-                fulltext = item.get("data", {}).get("fulltext", "")
-                doc_text = (
-                    fulltext
-                    if fulltext.strip()
-                    else ZoteroMapper.create_document_text(item)
-                )
+                doc_text = ZoteroMapper.create_document_text(item)
                 metadata = ZoteroMapper.create_metadata(item)
 
                 if not doc_text.strip():
@@ -652,7 +652,7 @@ async def semantic_search(
 
 async def update_database(
     force_rebuild: bool = False,
-    include_fulltext: bool = False,
+    include_fulltext: bool = True,
     limit: int | None = None,
 ) -> dict[str, Any]:
     """Async wrapper for database update."""

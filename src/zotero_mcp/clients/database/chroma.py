@@ -49,12 +49,24 @@ class ChromaClient:
         Args:
             collection_name: Name of the ChromaDB collection
             persist_directory: Directory to persist the database
-            embedding_model: Model to use for embeddings (only 'default' supported)
-            embedding_config: Configuration for the embedding model (not used for default)
+            embedding_model: Deprecated; local embedding is always used
+            embedding_config: Deprecated; local embedding has no runtime config
         """
         self.collection_name = collection_name
-        self.embedding_model = embedding_model
-        self.embedding_config = embedding_config or {}
+        if embedding_model != "default":
+            logger.warning(
+                "Ignoring embedding_model=%r; semantic search is local-only and "
+                "always uses ChromaDB DefaultEmbeddingFunction",
+                embedding_model,
+            )
+        if embedding_config:
+            logger.warning(
+                "Ignoring embedding_config; semantic search is local-only and "
+                "does not use remote embedding provider settings"
+            )
+        # Semantic search embedding is intentionally fixed to local ONNX embedding.
+        self.embedding_model = "default"
+        self.embedding_config: dict[str, Any] = {}
 
         # Set up persistent directory
         if persist_directory is None:
@@ -91,9 +103,10 @@ class ChromaClient:
                     if existing_name != new_name:
                         # Log to stderr instead of letting ChromaDB print to stdout
                         sys.stderr.write(
-                            f"ChromaDB: Collection exists with different embedding function: {existing_name} vs {new_name}\n"
+                            "ChromaDB: Collection exists with different "
+                            f"embedding function: {existing_name} vs {new_name}\n"
                         )
-                        # Use the existing collection's embedding function to avoid conflicts
+                        # Use existing embedding function to avoid collection conflicts.
                         self.embedding_function = existing_ef
 
             except Exception:
@@ -271,8 +284,6 @@ def create_chroma_client(config_path: str | None = None) -> ChromaClient:
     # Default configuration
     config = {
         "collection_name": "zotero_library",
-        "embedding_model": "default",
-        "embedding_config": {},
     }
 
     # Load configuration from file if it exists
@@ -280,19 +291,24 @@ def create_chroma_client(config_path: str | None = None) -> ChromaClient:
         try:
             with open(config_path) as f:
                 file_config = json.load(f)
-                config.update(file_config.get("semantic_search", {}))
+                semantic_cfg = file_config.get("semantic_search", {})
+                if isinstance(semantic_cfg, dict):
+                    if semantic_cfg.get("embedding_model") not in (None, "default"):
+                        logger.warning(
+                            "Ignoring semantic_search.embedding_model=%r; "
+                            "semantic search embedding is local-only",
+                            semantic_cfg.get("embedding_model"),
+                        )
+                    if semantic_cfg.get("embedding_config"):
+                        logger.warning(
+                            "Ignoring semantic_search.embedding_config; "
+                            "semantic search embedding is local-only"
+                        )
+                    if semantic_cfg.get("collection_name"):
+                        config["collection_name"] = semantic_cfg["collection_name"]
         except Exception as e:
             logger.warning(f"Error loading config from {config_path}: {e}")
 
-    # Load configuration from environment variables
-    env_embedding_model = os.getenv("ZOTERO_EMBEDDING_MODEL")
-    if env_embedding_model:
-        config["embedding_model"] = env_embedding_model
-
     return ChromaClient(
         collection_name=str(config["collection_name"]),
-        embedding_model=str(config["embedding_model"]),
-        embedding_config=config["embedding_config"]
-        if isinstance(config["embedding_config"], dict)
-        else {},
     )

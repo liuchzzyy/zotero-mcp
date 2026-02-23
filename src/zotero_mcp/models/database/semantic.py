@@ -20,8 +20,11 @@ class UpdateDatabaseInput(BaseInput):
         description="Maximum number of items to process (useful for testing)",
     )
     extract_fulltext: bool = Field(
-        default=False,
-        description="Whether to extract and index full text content (slower but more comprehensive)",
+        default=True,
+        description=(
+            "Whether to extract and index full text content "
+            "(enabled by default)"
+        ),
     )
 
 

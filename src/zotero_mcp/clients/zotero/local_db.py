@@ -36,6 +36,7 @@ class ZoteroItem:
     date_added: str | None = None
     date_modified: str | None = None
     tags: list[str] = field(default_factory=list)
+    annotations: list[dict[str, str]] = field(default_factory=list)
 
     def get_searchable_text(self, max_fulltext: int = 5000) -> str:
         """
@@ -63,6 +64,28 @@ class ZoteroItem:
 
         if self.notes:
             parts.append(f"Notes: {self.notes}")
+
+        if self.tags:
+            parts.append(f"Tags: {'; '.join(self.tags)}")
+
+        if self.annotations:
+            annotation_texts = [
+                " ".join(
+                    filter(
+                        None,
+                        [
+                            ann.get("type", ""),
+                            ann.get("text", ""),
+                            ann.get("comment", ""),
+                            ann.get("page", ""),
+                        ],
+                    )
+                )
+                for ann in self.annotations
+            ]
+            joined_annotations = "\n".join(filter(None, annotation_texts))
+            if joined_annotations:
+                parts.append(f"Annotations: {joined_annotations}")
 
         if self.fulltext:
             truncated = (
@@ -223,20 +246,29 @@ class LocalDatabaseClient:
         JOIN itemTypes it ON i.itemTypeID = it.itemTypeID
 
         -- Title (fieldID = 1)
-        LEFT JOIN itemData title_data ON i.itemID = title_data.itemID AND title_data.fieldID = 1
+        LEFT JOIN itemData title_data
+            ON i.itemID = title_data.itemID
+            AND title_data.fieldID = 1
         LEFT JOIN itemDataValues title_val ON title_data.valueID = title_val.valueID
 
         -- Abstract (fieldID = 2)
-        LEFT JOIN itemData abstract_data ON i.itemID = abstract_data.itemID AND abstract_data.fieldID = 2
-        LEFT JOIN itemDataValues abstract_val ON abstract_data.valueID = abstract_val.valueID
+        LEFT JOIN itemData abstract_data
+            ON i.itemID = abstract_data.itemID
+            AND abstract_data.fieldID = 2
+        LEFT JOIN itemDataValues abstract_val
+            ON abstract_data.valueID = abstract_val.valueID
 
         -- Extra (fieldID = 16)
-        LEFT JOIN itemData extra_data ON i.itemID = extra_data.itemID AND extra_data.fieldID = 16
+        LEFT JOIN itemData extra_data
+            ON i.itemID = extra_data.itemID
+            AND extra_data.fieldID = 16
         LEFT JOIN itemDataValues extra_val ON extra_data.valueID = extra_val.valueID
 
         -- DOI
         LEFT JOIN fields doi_f ON doi_f.fieldName = 'DOI'
-        LEFT JOIN itemData doi_data ON i.itemID = doi_data.itemID AND doi_data.fieldID = doi_f.fieldID
+        LEFT JOIN itemData doi_data
+            ON i.itemID = doi_data.itemID
+            AND doi_data.fieldID = doi_f.fieldID
         LEFT JOIN itemDataValues doi_val ON doi_data.valueID = doi_val.valueID
 
         -- Notes
@@ -248,7 +280,9 @@ class LocalDatabaseClient:
 
         WHERE it.typeName NOT IN ('attachment', 'note', 'annotation')
 
-        GROUP BY i.itemID, i.key, i.itemTypeID, it.typeName, i.dateAdded, i.dateModified,
+        GROUP BY
+                 i.itemID, i.key, i.itemTypeID, it.typeName,
+                 i.dateAdded, i.dateModified,
                  title_val.value, abstract_val.value, extra_val.value
 
         ORDER BY i.dateModified DESC
@@ -284,6 +318,8 @@ class LocalDatabaseClient:
                 extra=row["extra"],
                 date_added=row["dateAdded"],
                 date_modified=row["dateModified"],
+                tags=self._get_item_tags(row["itemID"]),
+                annotations=self._get_item_annotations(row["itemID"]),
             )
             items.append(item)
 
@@ -450,6 +486,53 @@ class LocalDatabaseClient:
 
         # Truncate to reasonable size
         return (text[:10000], source)
+
+    def _get_item_tags(self, item_id: int) -> list[str]:
+        """Load tags for an item from local database."""
+        conn = self._get_connection()
+        query = """
+            SELECT t.name
+            FROM itemTags it
+            JOIN tags t ON t.tagID = it.tagID
+            WHERE it.itemID = ?
+        """
+        tags = []
+        try:
+            for row in conn.execute(query, (item_id,)):
+                tag = row["name"]
+                if isinstance(tag, str) and tag.strip():
+                    tags.append(tag.strip())
+        except sqlite3.Error as e:
+            logger.debug(f"Failed to query tags for item {item_id}: {e}")
+        return tags
+
+    def _get_item_annotations(self, item_id: int) -> list[dict[str, str]]:
+        """Load PDF annotation text/comment for a parent item."""
+        conn = self._get_connection()
+        query = """
+            SELECT
+                COALESCE(a.annotationType, '') AS annotation_type,
+                COALESCE(a.text, '') AS annotation_text,
+                COALESCE(a.comment, '') AS annotation_comment,
+                COALESCE(a.pageLabel, '') AS page_label
+            FROM itemAttachments att
+            JOIN itemAnnotations a ON a.parentItemID = att.itemID
+            WHERE att.parentItemID = ?
+        """
+        annotations: list[dict[str, str]] = []
+        try:
+            for row in conn.execute(query, (item_id,)):
+                entry = {
+                    "type": str(row["annotation_type"] or ""),
+                    "text": str(row["annotation_text"] or ""),
+                    "comment": str(row["annotation_comment"] or ""),
+                    "page": str(row["page_label"] or ""),
+                }
+                if any(entry.values()):
+                    annotations.append(entry)
+        except sqlite3.Error as e:
+            logger.debug(f"Failed to query annotations for item {item_id}: {e}")
+        return annotations
 
     def _extract_text(self, file_path: Path) -> str:
         """Extract text from file based on type."""

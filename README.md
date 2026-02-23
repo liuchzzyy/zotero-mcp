@@ -219,7 +219,6 @@ zotero-mcp pdfs add --item-key ABCD1234 --file ./paper.pdf
 ### 语义搜索
 | 变量 | 默认值 | 说明 |
 |------|---------|------|
-| `ZOTERO_EMBEDDING_MODEL` | `default` | 嵌入模型 |
 | `OPENAI_API_KEY` | - | OpenAI 密钥 |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | OpenAI 模型 |
 | `GEMINI_API_KEY` | - | Gemini 密钥 |

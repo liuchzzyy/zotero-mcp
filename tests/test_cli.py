@@ -217,6 +217,18 @@ def test_semantic_status_supports_json_output():
         json.loads(payload[json_start:])
 
 
+def test_semantic_db_update_defaults_to_local_mode():
+    parser = build_parser()
+    args = parser.parse_args(["semantic", "db-update"])
+    assert args.local is True
+
+
+def test_semantic_db_update_supports_no_local():
+    parser = build_parser()
+    args = parser.parse_args(["semantic", "db-update", "--no-local"])
+    assert args.local is False
+
+
 def test_obfuscate_config_masks_api_keys_and_tokens():
     config = {
         "DEEPSEEK_API_KEY": "sk-1234567890",

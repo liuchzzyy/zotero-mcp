@@ -66,17 +66,12 @@ def setup_semantic_search(
 
     if existing_semantic_config:
         # Display config without sensitive info
-        model = existing_semantic_config.get("embedding_model", "unknown")
-        name = existing_semantic_config.get("embedding_config", {}).get(
-            "model_name", "unknown"
-        )
         update_freq = existing_semantic_config.get("update_config", {}).get(
             "update_frequency", "unknown"
         )
         db_path = existing_semantic_config.get("zotero_db_path", "auto-detect")
         print("Found existing semantic search configuration:")
-        print(f"  - Embedding model: {model}")
-        print(f"  - Embedding model name: {name}")
+        print("  - Embedding mode: local (fixed)")
         print(f"  - Update frequency: {update_freq}")
         print(f"  - Zotero database path: {db_path}")
         print("You can keep it or change it.")
@@ -85,11 +80,8 @@ def setup_semantic_search(
         if input().strip().lower() in ["y", "yes"]:
             return existing_semantic_config
 
-    print("Configure embedding models for semantic search over your Zotero library.")
-
-    # Use default embedding model
-    print("\nUsing default embedding model (all-MiniLM-L6-v2) - Free, runs locally")
-    config = {"embedding_model": "default"}
+    print("Semantic search uses a local embedding model (all-MiniLM-L6-v2).")
+    config: dict = {}
 
     # Configure update frequency
     print("\n=== Database Update Configuration ===")
@@ -279,12 +271,6 @@ def write_standalone_config(
             client_env["ZOTERO_LIBRARY_ID"] = library_id
         if library_type:
             client_env["ZOTERO_LIBRARY_TYPE"] = library_type
-
-    # Add semantic search env vars if configured
-    if semantic_config:
-        client_env["ZOTERO_EMBEDDING_MODEL"] = semantic_config.get(
-            "embedding_model", "default"
-        )
 
     full["client_env"] = client_env
 

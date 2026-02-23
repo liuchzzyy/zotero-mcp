@@ -15,6 +15,11 @@ class ZoteroMapper:
     """Helper class for mapping Zotero data."""
 
     @staticmethod
+    def _strip_html(value: str) -> str:
+        """Strip HTML tags from text."""
+        return re.sub(r"<[^>]+>", "", value)
+
+    @staticmethod
     def create_document_text(item: dict[str, Any]) -> str:
         """
         Create searchable text from a Zotero item.
@@ -42,16 +47,78 @@ class ZoteroMapper:
         if publication := data.get("publicationTitle"):
             extra_fields.append(publication)
 
+        # DOI / URL / Extra
+        if doi := data.get("DOI"):
+            extra_fields.append(str(doi))
+        if url := data.get("url"):
+            extra_fields.append(str(url))
+        if extra := data.get("extra"):
+            extra_fields.append(str(extra))
+
         # Tags
         if tags := data.get("tags"):
-            tag_text = " ".join([tag.get("tag", "") for tag in tags])
+            if isinstance(tags, list):
+                tag_text = " ".join(
+                    [
+                        tag.get("tag", "") if isinstance(tag, dict) else str(tag)
+                        for tag in tags
+                    ]
+                )
+            else:
+                tag_text = str(tags)
             extra_fields.append(tag_text)
 
         # Note content (if available)
         if note := data.get("note"):
-            # Clean HTML from notes
-            note_text = re.sub(r"<[^>]+>", "", note)
+            note_text = ZoteroMapper._strip_html(str(note))
             extra_fields.append(note_text)
+
+        # Child notes can be a string or list-like payload
+        notes = data.get("notes")
+        if isinstance(notes, list):
+            notes_text = " ".join(
+                [
+                    ZoteroMapper._strip_html(
+                        str(
+                            n.get("note", "")
+                            if isinstance(n, dict)
+                            else n
+                        )
+                    )
+                    for n in notes
+                ]
+            )
+            if notes_text:
+                extra_fields.append(notes_text)
+        elif isinstance(notes, str) and notes.strip():
+            extra_fields.append(ZoteroMapper._strip_html(notes))
+
+        # PDF annotations
+        annotations = data.get("annotations")
+        if isinstance(annotations, list):
+            annotation_text = " ".join(
+                [
+                    " ".join(
+                        filter(
+                            None,
+                            [
+                                str(a.get("type", "")),
+                                str(a.get("text", "")),
+                                str(a.get("comment", "")),
+                                str(a.get("page", "")),
+                            ],
+                        )
+                    )
+                    for a in annotations
+                    if isinstance(a, dict)
+                ]
+            )
+            if annotation_text:
+                extra_fields.append(annotation_text)
+
+        # Fulltext (e.g., extracted PDF content)
+        if fulltext := data.get("fulltext"):
+            extra_fields.append(str(fulltext))
 
         # Combine all text fields
         text_parts = [title, creators_text, abstract] + extra_fields
@@ -111,7 +178,8 @@ class ZoteroMapper:
         Parse creators string from local DB into API format.
 
         Args:
-            creators_str: Semicolon-separated creators string (e.g. "Smith, John; Doe, Jane")
+            creators_str: Semicolon-separated creators string
+                (e.g. "Smith, John; Doe, Jane")
 
         Returns:
             List of creator dictionaries

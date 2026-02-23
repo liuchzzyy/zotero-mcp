@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from zotero_mcp.cli_app.common import (
@@ -33,6 +34,19 @@ def _save_zotero_db_path_to_config(config_path: Path, db_path: str) -> None:
         json.dump(full_config, f, indent=2)
 
 
+def _add_local_mode_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--local",
+        dest="local",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Use local Zotero DB/API mode for semantic commands "
+            "(default: enabled; use --no-local for Web API mode)"
+        ),
+    )
+
+
 def register(subparsers: argparse._SubParsersAction) -> None:
     semantic = subparsers.add_parser("semantic", help="Semantic database commands")
     semantic_sub = semantic.add_subparsers(dest="subcommand", required=True)
@@ -56,10 +70,12 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     )
     db_update.add_argument("--config-path", help="Path to semantic search config")
     db_update.add_argument("--db-path", help="Path to Zotero database file")
+    _add_local_mode_arg(db_update)
     add_output_arg(db_update)
 
     db_status = semantic_sub.add_parser("db-status", help="Show database status")
     db_status.add_argument("--config-path", help="Path to semantic search config")
+    _add_local_mode_arg(db_status)
     add_output_arg(db_status)
 
     inspect = semantic_sub.add_parser("db-inspect", help="Inspect indexed documents")
@@ -78,11 +94,13 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     )
     inspect.add_argument("--stats", action="store_true", help="Show aggregate stats")
     inspect.add_argument("--config-path", help="Path to semantic search config")
+    _add_local_mode_arg(inspect)
     add_output_arg(inspect)
 
 
 def run(args: argparse.Namespace) -> int:
     load_config()
+    os.environ["ZOTERO_LOCAL"] = "true" if getattr(args, "local", True) else "false"
     from zotero_mcp.services.zotero.semantic_search import create_semantic_search
 
     if args.subcommand == "db-update":
