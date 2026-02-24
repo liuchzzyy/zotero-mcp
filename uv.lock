@@ -2916,7 +2916,7 @@ wheels = [
 
 [[package]]
 name = "zotero-mcp"
-version = "2.5.2"
+version = "2.5.2.post1"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
