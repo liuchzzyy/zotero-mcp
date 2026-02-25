@@ -52,8 +52,11 @@ tests/fixtures/
 # Git worktrees (isolated workspaces)
 worktrees/
 
-# Claude Desktop
+# Claude Desktop (exclude everything except skills)
 .claude/
+!.claude/
+!.claude/skills/
+!.claude/skills/**
 
 # Session logs
 *.session.txt
