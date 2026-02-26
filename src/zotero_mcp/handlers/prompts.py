@@ -70,7 +70,10 @@ class PromptHandler:
                         ),
                         PromptArgument(
                             name="template",
-                            description="Template name (default/multimodal/structured)",
+                            description=(
+                                "Template alias: research | review | default "
+                                "(or custom template text)"
+                            ),
                             required=False,
                         ),
                         PromptArgument(
@@ -626,7 +629,12 @@ class PromptHandler:
                             name="llm_model", description="Model name", required=False
                         ),
                         PromptArgument(
-                            name="template", description="Template name", required=False
+                            name="template",
+                            description=(
+                                "Template alias: research | review | default "
+                                "(or custom template text)"
+                            ),
+                            required=False,
                         ),
                         PromptArgument(
                             name="dry_run",

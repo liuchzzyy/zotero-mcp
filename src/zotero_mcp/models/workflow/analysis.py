@@ -115,7 +115,10 @@ class BatchAnalyzeInput(BaseInput):
     )
     template: str | None = Field(
         default=None,
-        description="Custom analysis template/instruction (Markdown)",
+        description=(
+            "Template alias (research/review/default) "
+            "or custom analysis template/instruction"
+        ),
     )
     dry_run: bool = Field(
         default=False,

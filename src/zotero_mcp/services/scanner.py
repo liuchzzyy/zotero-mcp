@@ -8,7 +8,7 @@ Scans library for items needing AI analysis with priority strategy:
 """
 
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import ValidationError
 
@@ -87,6 +87,7 @@ class GlobalScanner:
         llm_provider: str = "auto",
         source_collection: str | None = "00_INBOXS",
         include_multimodal: bool = True,
+        template: Literal["research", "review", "default"] = "default",
     ) -> dict[str, Any]:
         """
         Scan library and process items needing analysis.
@@ -105,6 +106,7 @@ class GlobalScanner:
             dry_run: Preview only, no changes
             llm_provider: LLM provider for analysis (auto/claude-cli)
             source_collection: Priority collection to scan first (default: 00_INBOXS)
+            template: Analysis template alias (research/review/default)
 
         Returns:
             Scan results with statistics
@@ -118,6 +120,7 @@ class GlobalScanner:
                 llm_provider=llm_provider,
                 source_collection=source_collection,
                 include_multimodal=include_multimodal,
+                template=template,
             )
             if not params.target_collection:
                 metrics = {
@@ -412,7 +415,7 @@ class GlobalScanner:
                         bundle=bundle,
                         llm_client=llm_client,
                         skip_existing=True,
-                        template=None,
+                        template=params.template,
                         dry_run=False,
                         delete_old_notes=True,
                         move_to_collection=params.target_collection,

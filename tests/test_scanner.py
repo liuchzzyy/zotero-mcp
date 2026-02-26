@@ -161,6 +161,8 @@ async def test_scan_uses_text_only_initial_fetch_for_deepseek():
     assert result["processed"] == 1
     first_call = scanner.batch_loader.fetch_many_bundles.await_args_list[0]
     assert first_call.kwargs["include_multimodal"] is False
+    analyze_call = workflow_service._analyze_single_item.await_args
+    assert analyze_call.kwargs["template"] == "default"
 
 
 @pytest.mark.asyncio

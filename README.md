@@ -145,6 +145,7 @@ zotero-mcp <command> <subcommand> [parameters]
 | `--dry-run` | `False` | 预览模式 |
 | `--llm-provider` | `auto` | `auto/claude-cli/deepseek/openai/gemini` |
 | `--source-collection` | `00_INBOXS` | 优先扫描集合 |
+| `--template` | `default` | 分析模板：`research/review/default` |
 | `--output` | `text` | 输出格式：`text/json` |
 
 ### `semantic` 子命令

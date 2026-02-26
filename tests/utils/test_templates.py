@@ -1,24 +1,27 @@
 """Tests for template utilities."""
 
 from zotero_mcp.utils.data.templates import (
-    DEFAULT_ANALYSIS_TEMPLATE_MULTIMODAL,
+    RESEARCH_ANALYSIS_TEMPLATE_JSON,
+    RESEARCH_ANALYSIS_TEMPLATE_MD,
+    REVIEW_ANALYSIS_TEMPLATE_JSON,
     format_multimodal_section,
-    get_multimodal_analysis_template,
+    get_analysis_template,
+    resolve_analysis_template,
 )
 
 
 class TestMultimodalTemplate:
     """Tests for multi-modal analysis template."""
 
-    def test_get_multimodal_template_returns_string(self):
-        """Test that get_multimodal_analysis_template returns a string."""
-        template = get_multimodal_analysis_template()
+    def test_get_analysis_template_returns_string(self):
+        """Test that get_analysis_template returns a string."""
+        template = get_analysis_template()
         assert isinstance(template, str)
         assert len(template) > 0
 
     def test_multimodal_template_contains_required_placeholders(self):
         """Test that multi-modal template contains required placeholders."""
-        template = get_multimodal_analysis_template()
+        template = get_analysis_template()
 
         # Check for basic placeholders
         assert "{title}" in template
@@ -36,20 +39,29 @@ class TestMultimodalTemplate:
 
     def test_multimodal_template_contains_figure_analysis_section(self):
         """Test that template has figure analysis section."""
-        template = get_multimodal_analysis_template()
+        template = get_analysis_template()
         # Template should have figure analysis placeholder
         assert "{figure_analysis_section}" in template
 
     def test_multimodal_template_contains_table_analysis_section(self):
         """Test that template has table analysis section."""
-        template = get_multimodal_analysis_template()
+        template = get_analysis_template()
         # Template should have table analysis placeholder
         assert "{table_analysis_section}" in template
 
     def test_default_template_constant_is_defined(self):
-        """Test that DEFAULT_ANALYSIS_TEMPLATE_MULTIMODAL constant exists."""
-        assert isinstance(DEFAULT_ANALYSIS_TEMPLATE_MULTIMODAL, str)
-        assert len(DEFAULT_ANALYSIS_TEMPLATE_MULTIMODAL) > 1000  # Non-empty template
+        """Test that research template constant exists."""
+        assert isinstance(RESEARCH_ANALYSIS_TEMPLATE_MD, str)
+        assert len(RESEARCH_ANALYSIS_TEMPLATE_MD) > 1000  # Non-empty template
+
+    def test_template_alias_resolution_supports_research_review_default(self):
+        assert (
+            resolve_analysis_template("default") == RESEARCH_ANALYSIS_TEMPLATE_JSON
+        )
+        assert (
+            resolve_analysis_template("research") == RESEARCH_ANALYSIS_TEMPLATE_JSON
+        )
+        assert resolve_analysis_template("review") == REVIEW_ANALYSIS_TEMPLATE_JSON
 
 
 class TestFormatMultimodalSection:

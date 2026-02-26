@@ -1,5 +1,7 @@
 """Shared operation parameter models for service entrypoints."""
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -15,6 +17,7 @@ class ScannerRunParams(BaseModel):
     llm_provider: str = Field(default="auto")
     source_collection: str | None = Field(default="00_INBOXS")
     include_multimodal: bool = Field(default=True)
+    template: Literal["research", "review", "default"] = Field(default="default")
 
 
 class MetadataUpdateBatchParams(BaseModel):

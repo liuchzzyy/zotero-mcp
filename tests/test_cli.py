@@ -41,6 +41,7 @@ def test_workflow_item_analysis_help_hides_multimodal_flag():
     assert "--multimodal" not in result.stdout
     assert "--no-multimodal" not in result.stdout
     assert "--target-collection" in result.stdout
+    assert "--template" in result.stdout
 
 
 def test_workflow_subcommands_follow_new_framework():

@@ -3,7 +3,10 @@ Utility functions and helpers for Zotero MCP.
 """
 
 from .config import get_logger, log_task_end, log_task_start
-from .data import DEFAULT_ANALYSIS_TEMPLATE_JSON, get_analysis_questions
+from .data import (
+    RESEARCH_ANALYSIS_TEMPLATE_JSON,
+    get_analysis_questions,
+)
 from .formatting import (
     DOI_PATTERN,
     beautify_ai_note,
@@ -38,7 +41,7 @@ __all__ = [
     "log_task_end",
     # Data
     "get_analysis_questions",
-    "DEFAULT_ANALYSIS_TEMPLATE_JSON",
+    "RESEARCH_ANALYSIS_TEMPLATE_JSON",
     # Formatting
     "beautify_ai_note",
     "markdown_to_html",

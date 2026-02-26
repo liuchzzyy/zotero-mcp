@@ -4,7 +4,9 @@ Template configuration for AI analysis.
 Supports loading analysis questions and templates from environment variables
 or configuration files.
 """
+# ruff: noqa: E501
 
+import os
 from typing import Any
 
 from zotero_mcp.utils.config import load_config
@@ -30,7 +32,7 @@ DEFAULT_ANALYSIS_QUESTIONS = [
     "这篇论文有什么优点和不足？",
 ]
 
-DEFAULT_ANALYSIS_TEMPLATE_JSON = """你是一位专业的科研文献分析助手。请基于论文文本、批注、图表线索和参考文献，输出结构化、证据驱动的分析结果。
+RESEARCH_ANALYSIS_TEMPLATE_JSON = """你是一位专业的科研文献分析助手。请基于论文文本、批注、图表线索和参考文献，输出结构化、证据驱动的分析结果。
 
 ## 论文基本信息
 
@@ -199,7 +201,7 @@ DEFAULT_ANALYSIS_TEMPLATE_JSON = """你是一位专业的科研文献分析助�
 """
 
 
-DEFAULT_ANALYSIS_TEMPLATE_MULTIMODAL = """你是一位专业的科研文献多模态分析助手。请综合 PDF 中的文本、表格、图片、批注、参考文献与版式信息，进行证据驱动、可追踪的深度分析。
+RESEARCH_ANALYSIS_TEMPLATE_MD = """你是一位专业的科研文献多模态分析助手。请综合 PDF 中的文本、表格、图片、批注、参考文献与版式信息，进行证据驱动、可追踪的深度分析。
 
 ## 论文基本信息
 
@@ -494,10 +496,6 @@ DEFAULT_ANALYSIS_TEMPLATE_MULTIMODAL = """你是一位专业的科研文献多�
 **分析目标**: 在多模态证据统一框架下，最大化提取论文可复用信息，并明确结论可信度与局限。
 """
 
-# Backward-compatible alias; keep a single template source of truth.
-DEFAULT_ANALYSIS_TEMPLATE = DEFAULT_ANALYSIS_TEMPLATE_MULTIMODAL
-
-
 # -------------------- Review Analysis Template --------------------
 
 
@@ -689,6 +687,44 @@ REVIEW_ANALYSIS_TEMPLATE_JSON = """你是一位专业的科研文献综述分析
 - 控制总长度在 8192 tokens 内
 """
 
+TEMPLATE_ALIASES: dict[str, str] = {
+    "default": RESEARCH_ANALYSIS_TEMPLATE_JSON,
+    "research": RESEARCH_ANALYSIS_TEMPLATE_JSON,
+    "review": REVIEW_ANALYSIS_TEMPLATE_JSON,
+}
+
+
+def resolve_analysis_template(
+    template: str | None,
+    *,
+    use_structured: bool = True,
+) -> str:
+    """Resolve template string with alias and env fallback support.
+
+    Priority:
+    1. Explicit `template` argument (alias or full template text)
+    2. `ANALYSIS_TEMPLATE` environment variable
+    3. Built-in default template:
+       - structured mode: `RESEARCH_ANALYSIS_TEMPLATE_JSON`
+       - non-structured mode: empty string
+    """
+    if template is not None:
+        normalized = template.strip().lower()
+        alias = TEMPLATE_ALIASES.get(normalized)
+        return alias if alias is not None else template
+
+    env_template = os.getenv("ANALYSIS_TEMPLATE")
+    if env_template is not None:
+        normalized = env_template.strip()
+        if normalized and normalized.lower() != "none":
+            alias = TEMPLATE_ALIASES.get(normalized.lower())
+            return alias if alias is not None else env_template
+
+    if use_structured:
+        return RESEARCH_ANALYSIS_TEMPLATE_JSON
+
+    return ""
+
 
 def get_review_analysis_template() -> str:
     """
@@ -800,11 +836,13 @@ def get_analysis_config() -> dict[str, Any]:
     else:
         questions = DEFAULT_ANALYSIS_QUESTIONS
 
-    # Get template (priority: env var > config file > default)
-    template = (
-        env.get("ANALYSIS_TEMPLATE", analysis_config.get("template", ""))
-        or DEFAULT_ANALYSIS_TEMPLATE_MULTIMODAL
-    )
+    # Get template (priority: env var > config file > default).
+    # Alias names (research/review/default) are resolved to built-in templates.
+    template_value = env.get("ANALYSIS_TEMPLATE", analysis_config.get("template", ""))
+    if template_value:
+        template = resolve_analysis_template(str(template_value), use_structured=True)
+    else:
+        template = RESEARCH_ANALYSIS_TEMPLATE_MD
 
     # Get theme (priority: env var > config file > default)
     theme = env.get("NOTE_THEME", analysis_config.get("theme", "orange-heart"))
@@ -868,16 +906,6 @@ def get_note_theme_config() -> dict[str, str]:
     """
     config = get_analysis_config()
     return config["theme_config"]
-
-
-def get_multimodal_analysis_template() -> str:
-    """
-    Backward-compatible helper that returns the unified analysis template.
-
-    Returns:
-        Analysis template string.
-    """
-    return get_analysis_template()
 
 
 def format_multimodal_section(

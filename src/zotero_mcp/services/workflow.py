@@ -6,7 +6,6 @@ with checkpoint support for resuming interrupted workflows.
 """
 
 from collections.abc import Callable
-import os
 import time
 from typing import Any, Literal
 
@@ -28,58 +27,14 @@ from zotero_mcp.utils.config.logging import (
     log_task_start,
 )
 from zotero_mcp.utils.data.templates import (
-    DEFAULT_ANALYSIS_TEMPLATE_JSON,
-    REVIEW_ANALYSIS_TEMPLATE_JSON,
     get_analysis_questions,
+    resolve_analysis_template,
 )
 from zotero_mcp.utils.formatting.beautify import beautify_ai_note
 from zotero_mcp.utils.formatting.helpers import format_creators
 from zotero_mcp.utils.formatting.markdown import markdown_to_html
 
 logger = get_logger(__name__)
-
-
-# -------------------- Workflow Service --------------------
-
-
-_TEMPLATE_ALIASES: dict[str, str] = {
-    "review": REVIEW_ANALYSIS_TEMPLATE_JSON,
-    "综述": REVIEW_ANALYSIS_TEMPLATE_JSON,
-    "default": DEFAULT_ANALYSIS_TEMPLATE_JSON,
-    "research": DEFAULT_ANALYSIS_TEMPLATE_JSON,
-    "研究": DEFAULT_ANALYSIS_TEMPLATE_JSON,
-}
-
-
-def _resolve_runtime_template(template: str | None, use_structured: bool) -> str:
-    """
-    Resolve analysis template with runtime priority.
-
-    Priority:
-    1. Explicit function parameter `template` (alias keywords or full template string)
-    2. .env `ANALYSIS_TEMPLATE` (non-empty and not literal "none")
-    3. Built-in default (structured JSON template if use_structured=True)
-
-    Alias keywords for `template`:
-    - "review" / "综述" → REVIEW_ANALYSIS_TEMPLATE_JSON
-    - "default" / "research" / "研究" → DEFAULT_ANALYSIS_TEMPLATE_JSON
-    """
-    if template is not None:
-        alias = _TEMPLATE_ALIASES.get(template.strip().lower())
-        return alias if alias is not None else template
-
-    env_template = os.getenv("ANALYSIS_TEMPLATE")
-    if env_template is not None:
-        normalized = env_template.strip()
-        if normalized and normalized.lower() != "none":
-            alias = _TEMPLATE_ALIASES.get(normalized.lower())
-            return alias if alias is not None else env_template
-
-    if use_structured:
-        return DEFAULT_ANALYSIS_TEMPLATE_JSON
-
-    # Empty string lets downstream LLM clients fall back to their own defaults.
-    return ""
 
 
 class WorkflowService:
@@ -551,7 +506,10 @@ class WorkflowService:
                 images_to_send = context["images"]
 
             # 4. Call LLM
-            template = _resolve_runtime_template(template, use_structured)
+            template = resolve_analysis_template(
+                template,
+                use_structured=use_structured,
+            )
             analysis_content = await self._call_llm_analysis(
                 item=item,
                 llm_client=llm_client,
