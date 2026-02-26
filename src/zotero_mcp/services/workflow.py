@@ -27,6 +27,7 @@ from zotero_mcp.utils.config.logging import (
     log_task_start,
 )
 from zotero_mcp.utils.data.templates import (
+    TEMPLATE_ALIASES,
     get_analysis_questions,
     resolve_analysis_template,
 )
@@ -35,6 +36,70 @@ from zotero_mcp.utils.formatting.helpers import format_creators
 from zotero_mcp.utils.formatting.markdown import markdown_to_html
 
 logger = get_logger(__name__)
+
+_CLASSIFY_PROMPT = """\
+Classify the academic paper below as one of these types and reply with ONLY the type keyword.
+
+Types:
+- research  (original experimental / computational work reporting new results)
+- review    (survey / review / overview / perspective / tutorial / roadmap)
+
+Title: {title}
+Journal: {journal}
+Abstract (first 300 chars): {abstract}
+
+Reply with exactly one word: research  OR  review"""
+
+
+async def classify_item_type_async(
+    title: str,
+    journal: str,
+    abstract: str,
+) -> str:
+    """Call DeepSeek to classify a paper as 'research' or 'review'.
+
+    Returns one of the keys in TEMPLATE_ALIASES.  Falls back to 'research'
+    on any error or ambiguous answer.
+    """
+    import os
+
+    api_key = os.getenv("DEEPSEEK_API_KEY", "")
+    base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+    if not api_key:
+        logger.warning("DEEPSEEK_API_KEY not set; defaulting template to 'research'")
+        return "research"
+
+    prompt = _CLASSIFY_PROMPT.format(
+        title=title[:200],
+        journal=journal[:80],
+        abstract=abstract[:300],
+    )
+
+    try:
+        from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        response = await client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=10,
+        )
+        label = (response.choices[0].message.content or "").strip().lower()
+        # Accept any known alias; fall back to 'research'
+        if label in TEMPLATE_ALIASES:
+            logger.info(f"Auto-classified '{title[:50]}' → {label}")
+            return label
+        # Tolerate slight variations: e.g. "review paper", "a review"
+        for alias in TEMPLATE_ALIASES:
+            if alias in label:
+                logger.info(f"Auto-classified '{title[:50]}' → {alias} (fuzzy: '{label}')")
+                return alias
+        logger.warning(f"Unrecognised label '{label}' for '{title[:50]}'; defaulting to 'research'")
+        return "research"
+    except Exception as e:
+        logger.warning(f"classify_item_type_async failed ({e}); defaulting to 'research'")
+        return "research"
 
 
 class WorkflowService:
@@ -505,7 +570,25 @@ class WorkflowService:
             if capability.can_handle_images() and context.get("images"):
                 images_to_send = context["images"]
 
-            # 4. Call LLM
+            # 4. Auto-classify item type when template="auto"
+            if template is not None and template.strip().lower() == "auto":
+                meta_data = bundle.get("metadata", {}).get("data", {})
+                detected = await classify_item_type_async(
+                    title=item.title or "",
+                    journal=(
+                        meta_data.get("publicationTitle")
+                        or meta_data.get("bookTitle")
+                        or ""
+                    ),
+                    abstract=meta_data.get("abstractNote") or "",
+                )
+                template = detected
+                logger.info(
+                    "Template auto-detected",
+                    extra={"item_key": item.key, "detected_type": detected},
+                )
+
+            # 4b. Resolve alias → full template string
             template = resolve_analysis_template(
                 template,
                 use_structured=use_structured,
