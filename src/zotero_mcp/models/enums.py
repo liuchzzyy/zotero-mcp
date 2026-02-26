@@ -19,6 +19,7 @@ class ToolName(StrEnum):
     GET_CHILDREN = "zotero_get_children"
     GET_COLLECTIONS = "zotero_get_collections"
     GET_BUNDLE = "zotero_get_bundle"
+    UPLOAD_PDF = "zotero_upload_pdf"
     # Collections & Tags
     CREATE_COLLECTION = "zotero_create_collection"
     DELETE_COLLECTION = "zotero_delete_collection"

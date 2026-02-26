@@ -163,6 +163,63 @@ async def test_pdfs_list_and_search_work():
 
 
 @pytest.mark.asyncio
+async def test_upload_pdf_rejects_missing_file(tmp_path):
+    data_service = MagicMock()
+    data_service.item_service = MagicMock()
+    data_service.item_service.upload_attachment = AsyncMock()
+    service = ResourceService(data_service=data_service)
+
+    with pytest.raises(FileNotFoundError):
+        await service.upload_pdf(
+            item_key="I1",
+            file_path=str(tmp_path / "missing.pdf"),
+        )
+
+    data_service.item_service.upload_attachment.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_upload_pdf_rejects_non_pdf_file(tmp_path):
+    text_file = tmp_path / "note.txt"
+    text_file.write_text("not a pdf", encoding="utf-8")
+
+    data_service = MagicMock()
+    data_service.item_service = MagicMock()
+    data_service.item_service.upload_attachment = AsyncMock()
+    service = ResourceService(data_service=data_service)
+
+    with pytest.raises(ValueError, match="Only PDF files are supported"):
+        await service.upload_pdf(item_key="I1", file_path=str(text_file))
+
+    data_service.item_service.upload_attachment.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_upload_pdf_returns_structured_result(tmp_path):
+    pdf_file = tmp_path / "paper.pdf"
+    pdf_file.write_bytes(b"%PDF-1.7\n%fake")
+
+    data_service = MagicMock()
+    data_service.item_service = MagicMock()
+    data_service.item_service.upload_attachment = AsyncMock(
+        return_value={"successful": {"0": "ATTACH001"}, "failed": {}}
+    )
+    service = ResourceService(data_service=data_service)
+
+    result = await service.upload_pdf(item_key="I1", file_path=str(pdf_file))
+
+    data_service.item_service.upload_attachment.assert_awaited_once_with(
+        parent_key="I1",
+        file_path=str(pdf_file.resolve()),
+        title=None,
+    )
+    assert result["success"] is True
+    assert result["attachment_keys"] == ["ATTACH001"]
+    assert result["item_key"] == "I1"
+    assert result["title"] == "paper.pdf"
+
+
+@pytest.mark.asyncio
 async def test_rename_collection_calls_update_and_returns_summary():
     data_service = MagicMock()
     data_service.update_collection = AsyncMock(return_value=None)

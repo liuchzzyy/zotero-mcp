@@ -39,7 +39,10 @@ class BaseInput(BaseModel):
 
     response_format: ResponseFormat = Field(
         default=ResponseFormat.MARKDOWN,
-        description="Output format: 'markdown' for human-readable or 'json' for machine-readable",
+        description=(
+            "Output format: 'markdown' for human-readable "
+            "or 'json' for machine-readable"
+        ),
     )
 
 
@@ -299,3 +302,16 @@ class NoteCreationResponse(BaseResponse):
     note_key: str | None = Field(default=None, description="Created note key")
     parent_key: str = Field(..., description="Parent item key")
     message: str = Field(..., description="Status message")
+
+
+class PdfUploadResponse(BaseResponse):
+    """Response for PDF upload."""
+
+    item_key: str = Field(..., description="Parent item key")
+    file_path: str = Field(..., description="Uploaded local file path")
+    title: str | None = Field(default=None, description="Attachment title")
+    attachment_keys: list[str] = Field(
+        default_factory=list, description="Created attachment keys"
+    )
+    message: str = Field(..., description="Status message")
+    result: dict | None = Field(default=None, description="Raw upload result")

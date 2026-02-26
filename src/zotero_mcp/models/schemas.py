@@ -34,6 +34,7 @@ from zotero_mcp.models.zotero.items import (
     GetCollectionsInput,
     GetFulltextInput,
     GetMetadataInput,
+    UploadPdfInput,
 )
 
 
@@ -69,5 +70,6 @@ __all__ = [
     "SearchItemsInput",
     "SearchNotesInput",
     "SemanticSearchInput",
+    "UploadPdfInput",
     "UpdateDatabaseInput",
 ]

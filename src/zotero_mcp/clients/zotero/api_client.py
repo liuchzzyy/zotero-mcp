@@ -541,7 +541,13 @@ class ZoteroAPIClient:
                 )
             return self.client.attachment_simple([file_path], parentid=parent_key)
 
-        return await loop.run_in_executor(None, _upload)
+        result = await loop.run_in_executor(None, _upload)
+        if isinstance(result, dict):
+            return result
+        checked = self._check_api_result(result, "upload_attachment")
+        if isinstance(checked, dict):
+            return checked
+        return {"result": checked}
 
     # -------------------- Download Methods --------------------
 

@@ -27,7 +27,10 @@ class PromptHandler:
             [
                 Prompt(
                     name="zotero_search_items",
-                    description="Search Zotero items by keyword (alias of zotero_search)",
+                    description=(
+                        "Search Zotero items by keyword "
+                        "(alias of zotero_search)"
+                    ),
                     arguments=[
                         PromptArgument(
                             name="query", description="Search keywords", required=True
@@ -41,7 +44,10 @@ class PromptHandler:
                 ),
                 Prompt(
                     name="zotero_get_item",
-                    description="Fetch a single Zotero item by key (alias of zotero_get_metadata)",
+                    description=(
+                        "Fetch a single Zotero item by key "
+                        "(alias of zotero_get_metadata)"
+                    ),
                     arguments=[
                         PromptArgument(
                             name="item_key",
@@ -52,7 +58,10 @@ class PromptHandler:
                 ),
                 Prompt(
                     name="zotero_analyze_paper",
-                    description="Analyze a local PDF (alias of zotero_batch_analyze_pdfs / workflow)",
+                    description=(
+                        "Analyze a local PDF "
+                        "(alias of zotero_batch_analyze_pdfs / workflow)"
+                    ),
                     arguments=[
                         PromptArgument(
                             name="file_path",
@@ -66,7 +75,10 @@ class PromptHandler:
                         ),
                         PromptArgument(
                             name="extract_images",
-                            description="Extract images for multimodal analysis (true/false)",
+                            description=(
+                                "Extract images for multimodal analysis "
+                                "(true/false)"
+                            ),
                             required=False,
                         ),
                     ],
@@ -266,6 +278,27 @@ class PromptHandler:
                         PromptArgument(
                             name="include_notes",
                             description="Include notes (true/false)",
+                            required=False,
+                        ),
+                    ],
+                ),
+                Prompt(
+                    name="zotero_upload_pdf",
+                    description="Upload a local PDF attachment to an item",
+                    arguments=[
+                        PromptArgument(
+                            name="item_key",
+                            description="Parent item key",
+                            required=True,
+                        ),
+                        PromptArgument(
+                            name="file_path",
+                            description="Local PDF file path",
+                            required=True,
+                        ),
+                        PromptArgument(
+                            name="title",
+                            description="Optional attachment title",
                             required=False,
                         ),
                     ],

@@ -345,7 +345,7 @@ def register_pdfs(subparsers: argparse._SubParsersAction) -> None:
 
     add_cmd = pdf_sub.add_parser("add", help="Add PDF attachment")
     add_cmd.add_argument("--item-key", required=True)
-    add_cmd.add_argument("--file", required=True, help="Local file path")
+    add_cmd.add_argument("--file", required=True, help="Local PDF file path")
     add_cmd.add_argument("--title")
     add_output_arg(add_cmd)
 
@@ -370,7 +370,7 @@ def run_pdfs(args: argparse.Namespace) -> int:
             limit=args.limit,
             offset=args.offset,
         ),
-        "add": lambda: service.upload_attachment(
+        "add": lambda: service.upload_pdf(
             item_key=normalize_item_key(args.item_key),
             file_path=args.file,
             title=args.title,

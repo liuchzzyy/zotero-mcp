@@ -18,6 +18,7 @@ from .items import (
     GetCollectionsInput,
     GetFulltextInput,
     GetMetadataInput,
+    UploadPdfInput,
 )
 from .note_structure import (
     AnyBlock,
@@ -43,6 +44,7 @@ __all__ = [
     "GetChildrenInput",
     "GetCollectionsInput",
     "GetBundleInput",
+    "UploadPdfInput",
     # Collections
     "CreateCollectionInput",
     "DeleteCollectionInput",

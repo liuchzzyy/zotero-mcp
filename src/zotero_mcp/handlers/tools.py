@@ -22,6 +22,7 @@ from zotero_mcp.models.common import (
     NoteCreationResponse,
     NotesResponse,
     OutputFormat,
+    PdfUploadResponse,
     ResponseFormat,
     SearchResponse,
     SearchResultItem,
@@ -55,6 +56,7 @@ from zotero_mcp.models.schemas import (
     SearchNotesInput,
     SemanticSearchInput,
     UpdateDatabaseInput,
+    UploadPdfInput,
 )
 from zotero_mcp.models.workflow import (
     BatchAnalyzeResponse,
@@ -196,6 +198,11 @@ class ToolHandler:
                 name=ToolName.GET_BUNDLE,
                 description="Get comprehensive item bundle",
                 inputSchema=GetBundleInput.model_json_schema(),
+            ),
+            Tool(
+                name=ToolName.UPLOAD_PDF,
+                description="Upload a local PDF attachment to an item",
+                inputSchema=UploadPdfInput.model_json_schema(),
             ),
             # Annotations & notes
             Tool(
@@ -532,13 +539,15 @@ class ToolHandler:
                         normalize_item_key(params.item_key)
                     )
                     if not fulltext:
+                        error_message = (
+                            "No full-text content available for item "
+                            f"{params.item_key}. This may be because the item "
+                            "has no attachment, or the content hasn't been indexed "
+                            "by Zotero."
+                        )
                         response = FulltextResponse(
                             success=False,
-                            error=(
-                                f"No full-text content available for item {params.item_key}. "
-                                "This may be because the item has no attachment, "
-                                "or the content hasn't been indexed by Zotero."
-                            ),
+                            error=error_message,
                             item_key=params.item_key,
                             fulltext=None,
                             length=0,
@@ -665,6 +674,43 @@ class ToolHandler:
                         annotations=annotations,
                         fulltext=bundle.get("fulltext"),
                     )
+
+                case ToolName.UPLOAD_PDF:
+                    params = UploadPdfInput(**args)
+                    from zotero_mcp.services.resource_service import ResourceService
+
+                    resource_service = ResourceService(data_service=data_service)
+                    upload_result = await resource_service.upload_pdf(
+                        item_key=normalize_item_key(params.item_key),
+                        file_path=params.file_path,
+                        title=params.title,
+                    )
+                    attachment_keys = upload_result.get("attachment_keys", [])
+                    if not isinstance(attachment_keys, list):
+                        attachment_keys = []
+                    success = bool(upload_result.get("success", True))
+                    message = (
+                        "PDF uploaded successfully."
+                        if success
+                        else "PDF upload failed."
+                    )
+                    response = PdfUploadResponse(
+                        success=success,
+                        error=upload_result.get("error"),
+                        item_key=upload_result.get(
+                            "item_key", normalize_item_key(params.item_key)
+                        ),
+                        file_path=upload_result.get("file_path", params.file_path),
+                        title=upload_result.get("title"),
+                        attachment_keys=[str(key) for key in attachment_keys],
+                        message=str(upload_result.get("message", message)),
+                        result=(
+                            upload_result.get("result")
+                            if isinstance(upload_result.get("result"), dict)
+                            else None
+                        ),
+                    )
+
                 case ToolName.GET_ANNOTATIONS:
                     params = GetAnnotationsInput(**args)
                     if not params.item_key:

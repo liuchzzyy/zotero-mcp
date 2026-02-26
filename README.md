@@ -244,6 +244,7 @@ zotero-mcp pdfs add --item-key ABCD1234 --file ./paper.pdf
 - `zotero_get_fulltext` - 全文内容
 - `zotero_get_bundle` - 完整条目数据
 - `zotero_get_children` - 附件和笔记
+- `zotero_upload_pdf` - 上传本地 PDF 到条目
 
 ### 集合和标签
 - `zotero_get_collections` - 列出集合

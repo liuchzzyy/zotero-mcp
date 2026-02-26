@@ -4,7 +4,7 @@ Pydantic models for item-related tools.
 
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 
 from zotero_mcp.models.common import BaseInput, OutputFormat, PaginatedInput
 
@@ -62,11 +62,17 @@ class GetCollectionsInput(PaginatedInput):
 
     collection_key: str | None = Field(
         default=None,
-        description="If provided, get items in this collection. If None, list collections.",
+        description=(
+            "If provided, get items in this collection. "
+            "If None, list collections."
+        ),
     )
     parent_key: str | None = Field(
         default=None,
-        description="Parent collection key to list sub-collections. None for top-level.",
+        description=(
+            "Parent collection key to list sub-collections. "
+            "None for top-level."
+        ),
     )
     include_item_count: bool = Field(
         default=True, description="Whether to include item count for each collection"
@@ -89,7 +95,7 @@ class GetCollectionItemsInput(PaginatedInput):
 
 
 class GetBundleInput(BaseInput):
-    """Input for zotero_get_bundle tool - fetches metadata, fulltext, and children at once."""
+    """Input for zotero_get_bundle tool with metadata, fulltext, and children."""
 
     item_key: str = Field(
         ..., min_length=1, max_length=20, description="Zotero item key/ID"
@@ -109,6 +115,29 @@ class GetBundleInput(BaseInput):
         ge=100,
         le=100000,
         description="Maximum characters for full text. None for unlimited.",
+    )
+
+
+class UploadPdfInput(BaseInput):
+    """Input for zotero_upload_pdf tool."""
+
+    item_key: str = Field(
+        ...,
+        min_length=1,
+        max_length=20,
+        description="Parent Zotero item key",
+    )
+    file_path: str = Field(
+        ...,
+        min_length=1,
+        max_length=4096,
+        validation_alias=AliasChoices("file_path", "file"),
+        description="Local PDF file path",
+    )
+    title: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Optional attachment title",
     )
 
 

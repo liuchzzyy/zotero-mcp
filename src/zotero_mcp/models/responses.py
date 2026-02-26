@@ -18,6 +18,7 @@ from zotero_mcp.models.common.responses import (
     ItemDetailResponse,
     NoteCreationResponse,
     NotesResponse,
+    PdfUploadResponse,
     SearchResponse,
 )
 from zotero_mcp.models.workflow.analysis import (
@@ -195,6 +196,20 @@ class Formatters:
                 f"**Message:** {response.message}"
             )
 
+        if isinstance(response, PdfUploadResponse):
+            if not response.success:
+                return f"❌ {response.error or 'Failed to upload PDF.'}"
+            attachment_keys = ", ".join(f"`{k}`" for k in response.attachment_keys)
+            attachment_line = attachment_keys or "(not returned by Zotero API)"
+            return (
+                f"# PDF Uploaded\n\n"
+                f"**Parent:** `{response.item_key}`\n"
+                f"**File:** `{response.file_path}`\n"
+                f"**Title:** {response.title or '(auto)'}\n"
+                f"**Attachment Keys:** {attachment_line}\n"
+                f"**Message:** {response.message}"
+            )
+
         if isinstance(response, PrepareAnalysisResponse):
             lines = [
                 "# Prepare Analysis",
@@ -241,7 +256,8 @@ class Formatters:
             lines = ["# Workflows", "", f"Found {response.count} workflow(s).", ""]
             for wf in response.workflows:
                 lines.append(
-                    f"- `{wf.workflow_id}` ({wf.status}) {wf.processed}/{wf.total_items} source={wf.source_type}"
+                    f"- `{wf.workflow_id}` ({wf.status}) "
+                    f"{wf.processed}/{wf.total_items} source={wf.source_type}"
                 )
             return "\n".join(lines)
 
@@ -254,7 +270,8 @@ class Formatters:
             ]
             for match in response.matches:
                 lines.append(
-                    f"- **{match.name}** (`{match.key}`) items={match.item_count} score={match.match_score}"
+                    f"- **{match.name}** (`{match.key}`) "
+                    f"items={match.item_count} score={match.match_score}"
                 )
             return "\n".join(lines)
 

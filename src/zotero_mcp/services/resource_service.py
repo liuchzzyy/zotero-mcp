@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+from pathlib import Path
 import re
 from typing import Any
 
@@ -297,11 +298,68 @@ class ResourceService:
         file_path: str,
         title: str | None = None,
     ) -> dict[str, Any]:
-        return await self.data_service.item_service.upload_attachment(
-            parent_key=item_key,
+        return await self.upload_pdf(
+            item_key=item_key,
             file_path=file_path,
             title=title,
         )
+
+    async def upload_pdf(
+        self,
+        item_key: str,
+        file_path: str,
+        title: str | None = None,
+    ) -> dict[str, Any]:
+        path = Path(file_path).expanduser()
+        if not path.exists():
+            raise FileNotFoundError(f"PDF file not found: {path}")
+        if not path.is_file():
+            raise ValueError(f"Path is not a file: {path}")
+        if path.suffix.lower() != ".pdf":
+            raise ValueError(f"Only PDF files are supported: {path}")
+
+        resolved_path = str(path.resolve())
+        upload_result = await self.data_service.item_service.upload_attachment(
+            parent_key=item_key,
+            file_path=resolved_path,
+            title=title,
+        )
+
+        attachment_keys = self._extract_attachment_keys(upload_result)
+        success = True
+        if isinstance(upload_result, dict) and "successful" in upload_result:
+            success = len(attachment_keys) > 0
+
+        return {
+            "success": success,
+            "item_key": item_key,
+            "file_path": resolved_path,
+            "title": title or path.name,
+            "attachment_keys": attachment_keys,
+            "result": upload_result,
+        }
+
+    @staticmethod
+    def _extract_attachment_keys(upload_result: Any) -> list[str]:
+        if not isinstance(upload_result, dict):
+            return []
+        successful = upload_result.get("successful")
+        if not isinstance(successful, dict):
+            return []
+
+        keys: list[str] = []
+        for value in successful.values():
+            if isinstance(value, str) and value:
+                keys.append(value)
+                continue
+            if not isinstance(value, dict):
+                continue
+            key = value.get("key")
+            if not key and isinstance(value.get("data"), dict):
+                key = value["data"].get("key")
+            if key:
+                keys.append(str(key))
+        return keys
 
     async def delete_pdf(self, item_key: str) -> dict[str, Any]:
         result = await self.data_service.delete_item(item_key)
