@@ -1,5 +1,5 @@
 """
-把 00_INBOXS_AA 中出版社为 Wiley、RSC、ACS 且含有一个 PDF 附件的条目移动到 00_AA。
+把 00_INBOXS_AA 中出版社为 Wiley、RSC、ACS、Elsevier 且含有一个 PDF 附件的条目移动到 00_AA。
 通过 publicationTitle / publisher / extra 字段进行出版社识别。
 """
 import re
@@ -68,6 +68,38 @@ PUBLISHER_PATTERNS = {
         r"biochemistry",
         r"the journal of organic chemistry",
         r"industrial.*engineering chemistry",
+    ],
+    "Elsevier": [
+        r"\belsevier\b",           # publisher 字段通常为 "Elsevier" 或 "Elsevier BV"
+        r"electrochimica acta",
+        r"journal of power sources",
+        r"journal of electroanalytical chemistry",
+        r"chemical engineering journal",
+        r"applied surface science",
+        r"materials today",
+        r"nano energy",
+        r"energy storage materials",
+        r"journal of alloys and compounds",
+        r"ceramics international",
+        r"solid state ionics",
+        r"carbon",
+        r"energy.*environmental science",
+        r"journal of colloid and interface science",
+        r"chemical physics letters",
+        r"electrochemistry communications",
+        r"international journal of hydrogen energy",
+        r"applied energy",
+        r"journal of energy storage",
+        r"journal of membrane science",
+        r"materials letters",
+        r"scripta materialia",
+        r"acta materialia",
+        r"journal of solid state chemistry",
+        r"coordination chemistry reviews",
+        r"progress in natural science",
+        r"chinese chemical letters",
+        r"journal of hazardous materials",
+        r"chemosphere",
     ],
 }
 
