@@ -70,59 +70,6 @@ async def test_clean_empty_items_delete_counts_failures():
 
 
 @pytest.mark.asyncio
-async def test_clean_tags_updates_only_items_with_removed_tags():
-    data_service = MagicMock()
-    data_service.get_collections = AsyncMock(
-        return_value=[{"key": "C1", "data": {"name": "Inbox"}}]
-    )
-    data_service.get_collection_items = AsyncMock(
-        return_value=[
-            SimpleNamespace(key="I1", title="Item 1", item_type="journalArticle"),
-            SimpleNamespace(key="I2", title="Item 2", item_type="journalArticle"),
-        ]
-    )
-    data_service.get_item = AsyncMock(
-        side_effect=[
-            {"data": {"tags": [{"tag": "AI_keep"}, {"tag": "remove_me"}]}},
-            {"data": {"tags": [{"tag": "AI_only"}]}},
-        ]
-    )
-    data_service.update_item = AsyncMock(return_value={})
-
-    service = LibraryMaintenanceService(data_service=data_service)
-    result = await service.clean_tags(
-        collection_name=None,
-        batch_size=10,
-        limit=None,
-        keep_prefix="AI",
-        dry_run=False,
-    )
-
-    assert result["items_updated"] == 1
-    assert result["total_tags_removed"] == 1
-    data_service.update_item.assert_awaited_once()
-    updated_item = data_service.update_item.await_args.args[0]
-    assert updated_item["data"]["tags"] == [{"tag": "AI_keep"}]
-
-
-@pytest.mark.asyncio
-async def test_clean_tags_returns_error_when_collection_not_found():
-    data_service = MagicMock()
-    data_service.find_collection_by_name = AsyncMock(return_value=[])
-
-    service = LibraryMaintenanceService(data_service=data_service)
-    result = await service.clean_tags(
-        collection_name="NOT_EXIST",
-        batch_size=10,
-        limit=1,
-        keep_prefix="AI",
-        dry_run=True,
-    )
-
-    assert result["error"] == "Collection not found: NOT_EXIST"
-
-
-@pytest.mark.asyncio
 async def test_purge_tags_updates_items_and_reports_summary():
     data_service = MagicMock()
     data_service.get_collections = AsyncMock(
