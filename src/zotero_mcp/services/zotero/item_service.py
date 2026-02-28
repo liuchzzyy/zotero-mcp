@@ -350,7 +350,7 @@ class ItemService:
     async def add_tags_to_item(self, item_key: str, tags: list[str]) -> dict[str, Any]:
         """Add tags to an item."""
         result = await self.api_client.add_tags(item_key, tags)
-        self._cache.invalidate("get_tags", {"limit": 100})
+        self._cache.clear()
         return result
 
     async def upload_attachment(
@@ -365,7 +365,9 @@ class ItemService:
 
     async def update_item(self, item: dict[str, Any]) -> dict[str, Any]:
         """Update an item's data."""
-        return await self.api_client.update_item(item)
+        result = await self.api_client.update_item(item)
+        self._cache.clear()
+        return result
 
     async def create_items(self, items: list[dict[str, Any]]) -> dict[str, Any]:
         """Create new items."""

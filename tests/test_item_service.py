@@ -196,3 +196,33 @@ async def test_get_fulltext_keeps_api_when_local_is_not_richer(mock_api_client):
     result = await service.get_fulltext("ITEM2")
 
     assert result == api_text
+
+
+@pytest.mark.asyncio
+async def test_add_tags_to_item_clears_cache(item_service, mock_api_client):
+    mock_api_client.get_collections.return_value = [
+        {"key": "COLL1", "data": {"name": "Collection 1"}}
+    ]
+    mock_api_client.add_tags.return_value = {"ok": True}
+
+    await item_service.get_collections()
+    await item_service.get_collections()
+    assert mock_api_client.get_collections.await_count == 1
+
+    await item_service.add_tags_to_item("ITEM1", ["AI分析"])
+    await item_service.get_collections()
+    assert mock_api_client.get_collections.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_update_item_clears_cache(item_service, mock_api_client):
+    mock_api_client.get_tags.return_value = [{"tag": "AI分析"}]
+    mock_api_client.update_item.return_value = {"ok": True}
+
+    await item_service.get_tags(limit=10)
+    await item_service.get_tags(limit=10)
+    assert mock_api_client.get_tags.await_count == 1
+
+    await item_service.update_item({"key": "ITEM1", "data": {"title": "Updated"}})
+    await item_service.get_tags(limit=10)
+    assert mock_api_client.get_tags.await_count == 2

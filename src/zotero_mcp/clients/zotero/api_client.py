@@ -15,6 +15,11 @@ from pyzotero import zotero
 
 from zotero_mcp.utils.config.logging import get_logger
 from zotero_mcp.utils.formatting.helpers import is_local_mode
+from zotero_mcp.utils.formatting.tags import (
+    normalize_input_tags,
+    normalize_tag_names,
+    to_tag_objects,
+)
 from zotero_mcp.utils.system.errors import (
     ConfigurationError,
     NotFoundError,
@@ -326,7 +331,9 @@ class ZoteroAPIClient:
                     if pdf_bytes and len(pdf_bytes) > 100:
                         parsed = await loop.run_in_executor(
                             None,
-                            lambda: extract_text_from_pdf_bytes(pdf_bytes),
+                            lambda raw_pdf=pdf_bytes: extract_text_from_pdf_bytes(
+                                raw_pdf
+                            ),
                         )
                         if parsed and parsed.strip():
                             pdf_text = parsed
@@ -765,13 +772,18 @@ class ZoteroAPIClient:
         loop = asyncio.get_event_loop()
         item = await self.get_item(item_key)
 
-        # Get existing tags
-        existing_tags = {t.get("tag", "") for t in item.get("data", {}).get("tags", [])}
+        data = item.setdefault("data", {})
+        existing_tag_names = normalize_tag_names(data.get("tags", []))
+        normalized_input = normalize_input_tags(tags)
 
-        # Add new tags (deduplicate)
-        for tag in tags:
-            if tag and tag not in existing_tags:
-                item["data"]["tags"].append({"tag": tag})
+        seen = set(existing_tag_names)
+        for tag_name in normalized_input:
+            if tag_name in seen:
+                continue
+            seen.add(tag_name)
+            existing_tag_names.append(tag_name)
+
+        data["tags"] = to_tag_objects(existing_tag_names)
 
         return await loop.run_in_executor(None, lambda: self.client.update_item(item))
 
@@ -814,13 +826,19 @@ def get_zotero_client() -> ZoteroAPIClient:
     if not local and not library_id:
         raise ConfigurationError(
             "ZOTERO_LIBRARY_ID is required for web API access",
-            suggestion="Set ZOTERO_LOCAL=true for local access, or provide ZOTERO_LIBRARY_ID",
+            suggestion=(
+                "Set ZOTERO_LOCAL=true for local access, "
+                "or provide ZOTERO_LIBRARY_ID"
+            ),
         )
 
     if not local and not api_key:
         raise ConfigurationError(
             "ZOTERO_API_KEY is required for web API access",
-            suggestion="Set ZOTERO_LOCAL=true for local access, or provide ZOTERO_API_KEY",
+            suggestion=(
+                "Set ZOTERO_LOCAL=true for local access, "
+                "or provide ZOTERO_API_KEY"
+            ),
         )
 
     if library_type not in ("user", "group"):

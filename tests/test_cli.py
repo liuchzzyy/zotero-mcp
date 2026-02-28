@@ -102,6 +102,7 @@ def test_tags_subcommands_are_exposed():
         "add",
         "search",
         "delete",
+        "purge",
         "rename",
     ]:
         assert subcommand in result.stdout
@@ -186,7 +187,8 @@ def test_dry_run_defaults_are_disabled():
         ["workflow", "metadata-update"],
         ["workflow", "deduplicate"],
         ["items", "delete-empty"],
-        ["tags", "delete"],
+        ["tags", "delete", "--item-key", "ABC123", "--all"],
+        ["tags", "purge", "--tags", "AI分析"],
         ["tags", "rename", "--old-name", "old", "--new-name", "new"],
         ["collections", "delete-empty"],
     ]
@@ -222,6 +224,33 @@ def test_item_analysis_template_defaults_to_auto():
         ]
     )
     assert args.template == "auto"
+
+
+def test_tags_delete_accepts_all_mode():
+    parser = build_parser()
+    args = parser.parse_args(["tags", "delete", "--item-key", "ABC123", "--all"])
+    assert args.subcommand == "delete"
+    assert args.item_key == "ABC123"
+    assert args.all is True
+
+
+def test_tags_delete_accepts_specific_tags():
+    parser = build_parser()
+    args = parser.parse_args(
+        ["tags", "delete", "--item-key", "ABC123", "--tags", "t1", "t2"]
+    )
+    assert args.subcommand == "delete"
+    assert args.all is False
+    assert args.tags == ["t1", "t2"]
+
+
+def test_tags_purge_supports_collection_name():
+    parser = build_parser()
+    args = parser.parse_args(
+        ["tags", "purge", "--tags", "AI分析", "--collection", "01_SHORTTERMS"]
+    )
+    assert args.subcommand == "purge"
+    assert args.collection == "01_SHORTTERMS"
 
 
 def test_item_analysis_rejects_unimplemented_llm_provider_openai():

@@ -5,12 +5,13 @@ from typing import Any
 from zotero_mcp.clients.zotero import ZoteroItem
 from zotero_mcp.models.common import SearchResultItem
 from zotero_mcp.utils.formatting.helpers import format_creators
+from zotero_mcp.utils.formatting.tags import normalize_tag_names
 
 
 def api_item_to_search_result(item: dict[str, Any]) -> SearchResultItem:
     """Convert Zotero API item payload to SearchResultItem."""
     data = item.get("data", {})
-    tags = [t.get("tag", "") for t in data.get("tags", []) if t.get("tag")]
+    tags = normalize_tag_names(data.get("tags", []))
 
     return SearchResultItem(
         key=data.get("key", item.get("key", "")),

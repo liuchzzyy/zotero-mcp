@@ -16,6 +16,7 @@ from zotero_mcp.services.zotero.result_mapper import (
     api_item_to_search_result,
     zotero_item_to_search_result,
 )
+from zotero_mcp.utils.formatting.tags import normalize_input_tags, normalize_tag_names
 
 logger = logging.getLogger(__name__)
 
@@ -124,40 +125,24 @@ class SearchService:
         Returns:
             Matching items
         """
-        # Get items with first tag
-        if not tags:
+        include_tags = normalize_input_tags(tags)
+        exclude = set(normalize_input_tags(exclude_tags))
+        if not include_tags:
             return []
 
-        items = await self.api_client.get_items_by_tag(tags[0], limit=100)
+        api_limit = max(100, limit)
+        items = await self.api_client.get_items_by_tag(include_tags[0], limit=api_limit)
         if isinstance(items, int):
             logger.warning(f"Tag search API returned HTTP status {items}")
             return []
 
-        # Filter by additional tags
-        for tag in tags[1:]:
-            items = [
-                i
-                for i in items
-                if tag
-                in {
-                    t.get("tag", "")
-                    for t in i.get("data", {}).get("tags", [])
-                    if t.get("tag")
-                }
-            ]
+        filtered: list[dict] = []
+        for item in items:
+            item_tags = set(normalize_tag_names(item.get("data", {}).get("tags", [])))
+            if any(tag not in item_tags for tag in include_tags):
+                continue
+            if exclude and any(tag in item_tags for tag in exclude):
+                continue
+            filtered.append(item)
 
-        # Exclude tags
-        if exclude_tags:
-            for tag in exclude_tags:
-                items = [
-                    i
-                    for i in items
-                    if tag
-                    not in {
-                        t.get("tag", "")
-                        for t in i.get("data", {}).get("tags", [])
-                        if t.get("tag")
-                    }
-                ]
-
-        return [api_item_to_search_result(item) for item in items[:limit]]
+        return [api_item_to_search_result(item) for item in filtered[:limit]]
