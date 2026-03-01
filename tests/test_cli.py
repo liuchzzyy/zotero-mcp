@@ -216,6 +216,21 @@ def test_item_analysis_template_accepts_auto_alias():
     assert args.template == "auto"
 
 
+def test_item_analysis_template_accepts_book_alias():
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "workflow",
+            "item-analysis",
+            "--target-collection",
+            "01_SHORTTERMS",
+            "--template",
+            "book",
+        ]
+    )
+    assert args.template == "book"
+
+
 def test_item_analysis_template_defaults_to_auto():
     parser = build_parser()
     args = parser.parse_args(

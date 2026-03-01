@@ -127,7 +127,7 @@ class GlobalScanner:
         llm_provider: Literal["auto", "deepseek"] = "deepseek",
         source_collection: str | None = "00_INBOXS_BB",
         include_multimodal: bool = True,
-        template: Literal["research", "review", "auto"] = "auto",
+        template: Literal["research", "review", "book", "auto"] = "auto",
     ) -> dict[str, Any]:
         """
         Scan library and process items needing analysis.
@@ -146,7 +146,7 @@ class GlobalScanner:
             dry_run: Preview only, no changes
             llm_provider: LLM provider for analysis (auto/deepseek)
             source_collection: Priority collection to scan first (default: 00_INBOXS_BB)
-            template: Analysis template alias (research/review/auto)
+            template: Analysis template alias (research/review/book/auto)
 
         Returns:
             Scan results with statistics

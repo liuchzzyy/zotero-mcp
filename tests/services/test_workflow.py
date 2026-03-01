@@ -8,6 +8,7 @@ import pytest
 from zotero_mcp.models.workflow import AnalysisItem
 from zotero_mcp.services.workflow import WorkflowService, classify_pdf_type_async
 from zotero_mcp.utils.data.templates import (
+    BOOK_ANALYSIS_TEMPLATE_JSON,
     RESEARCH_ANALYSIS_TEMPLATE_JSON,
     REVIEW_ANALYSIS_TEMPLATE_JSON,
 )
@@ -843,6 +844,45 @@ async def test_analyze_single_item_auto_maps_ms_to_research_template(
     assert result.success is True
     call_kwargs = workflow_service._call_llm_analysis.await_args.kwargs
     assert call_kwargs["template"] == RESEARCH_ANALYSIS_TEMPLATE_JSON
+
+
+@pytest.mark.asyncio
+async def test_analyze_single_item_auto_detects_book_from_item_type(workflow_service):
+    item = MagicMock()
+    item.key = "ITEM6"
+    item.title = "Book Chapter"
+    item.authors = "Author"
+    item.date = "2026"
+    item.doi = ""
+
+    bundle = {
+        "metadata": {
+            "data": {"itemType": "bookSection", "publicationTitle": "Book Title"}
+        },
+        "fulltext": "chapter content",
+        "annotations": [],
+        "notes": [],
+        "multimodal": {"images": [], "tables": []},
+    }
+    llm_client = AsyncMock()
+    llm_client.provider = "deepseek"
+    workflow_service._call_llm_analysis = AsyncMock(return_value="analysis")
+    workflow_service._ensure_structured_quality = AsyncMock(return_value="analysis")
+
+    result = await workflow_service._analyze_single_item(
+        item=item,
+        bundle=bundle,
+        llm_client=llm_client,
+        skip_existing=True,
+        template="auto",
+        dry_run=True,
+        use_structured=True,
+        include_multimodal=False,
+    )
+
+    assert result.success is True
+    call_kwargs = workflow_service._call_llm_analysis.await_args.kwargs
+    assert call_kwargs["template"] == BOOK_ANALYSIS_TEMPLATE_JSON
 
 
 @pytest.mark.asyncio

@@ -202,6 +202,63 @@ async def test_scan_uses_text_only_initial_fetch_for_deepseek():
 
 
 @pytest.mark.asyncio
+async def test_scan_accepts_book_template_and_forwards_to_workflow():
+    item = MagicMock()
+    item.key = "ITEM1"
+    item.title = "Book Item"
+    item.data = {"tags": []}
+
+    data_service = AsyncMock()
+    data_service.find_collection_by_name = AsyncMock(
+        return_value=[{"key": "COLL1", "data": {"name": "00_INBOXS"}}]
+    )
+    data_service.get_collection_items = AsyncMock(side_effect=[[item], []])
+    data_service.get_item_children = AsyncMock(
+        return_value=[{"data": {"contentType": "application/pdf"}}]
+    )
+    data_service.get_sorted_collections = AsyncMock(return_value=[])
+
+    workflow_service = MagicMock()
+    workflow_service._analyze_single_item = AsyncMock(
+        return_value=SimpleNamespace(success=True, skipped=False, error=None)
+    )
+
+    deepseek_client = MagicMock()
+    deepseek_client.provider = "deepseek"
+
+    with (
+        patch(
+            "zotero_mcp.services.scanner.get_data_service",
+            return_value=data_service,
+        ),
+        patch(
+            "zotero_mcp.services.scanner.get_workflow_service",
+            return_value=workflow_service,
+        ),
+        patch("zotero_mcp.clients.llm.get_llm_client", return_value=deepseek_client),
+    ):
+        scanner = GlobalScanner()
+        loader = cast(Any, scanner.batch_loader)
+        loader.fetch_many_bundles = AsyncMock(
+            return_value=[{"metadata": {"key": "ITEM1"}, "fulltext": "text"}]
+        )
+
+        result = await scanner.scan_and_process(
+            scan_limit=10,
+            treated_limit=1,
+            target_collection="01_SHORTTERMS",
+            source_collection="00_INBOXS",
+            dry_run=False,
+            llm_provider="deepseek",
+            template="book",
+        )
+
+    assert result["processed"] == 1
+    analyze_call = workflow_service._analyze_single_item.await_args
+    assert analyze_call.kwargs["template"] == "book"
+
+
+@pytest.mark.asyncio
 async def test_scan_backfills_multimodal_only_for_missing_fulltext_items():
     item = MagicMock()
     item.key = "ITEM1"

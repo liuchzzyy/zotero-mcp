@@ -40,7 +40,10 @@ logger = get_logger(__name__)
 
 # Zotero item types treated as reference/book material → 'book' template
 _REF_ITEM_TYPES = frozenset({
-    "book", "bookSection", "encyclopediaArticle", "dictionaryEntry",
+    "book",
+    "booksection",
+    "encyclopediaarticle",
+    "dictionaryentry",
 })
 
 _CLASSIFY_PROMPT = """\
@@ -699,10 +702,11 @@ class WorkflowService:
             if template is not None and template.strip().lower() == "auto":
                 meta_data = bundle.get("metadata", {}).get("data", {})
                 fulltext_for_classify = context.get("fulltext") or ""
-                item_type_field = meta_data.get("itemType", "")
+                item_type_field = str(meta_data.get("itemType", "")).strip()
+                normalized_item_type = item_type_field.lower()
 
                 # Priority 1: Reference/book item types → 'book' template directly
-                if item_type_field in _REF_ITEM_TYPES:
+                if normalized_item_type in _REF_ITEM_TYPES:
                     detected = "book"
                     logger.info(
                         "Template auto-detected from item type",
