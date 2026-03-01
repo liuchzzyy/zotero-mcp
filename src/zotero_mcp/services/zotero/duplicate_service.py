@@ -169,6 +169,7 @@ class DuplicateDetectionService:
             total_duplicates_found = sum(
                 len(g.duplicate_keys) for g in duplicate_groups
             )
+        group_summaries = self._build_group_summaries(duplicate_groups, all_items)
 
         logger.info(
             f"📊 Scan complete: {total_scanned} items scanned, "
@@ -202,7 +203,7 @@ class DuplicateDetectionService:
                     "duplicates_found": total_duplicates_found,
                     "duplicates_removed": 0,
                     "cross_folder_copies": cross_folder_copies,
-                    "groups": duplicate_groups,
+                    "groups": group_summaries,
                     "dry_run": True,
                 },
             )
@@ -239,7 +240,7 @@ class DuplicateDetectionService:
                 "duplicates_removed": duplicates_removed,
                 "delete_failures": delete_failures,
                 "cross_folder_copies": cross_folder_copies,
-                "groups": duplicate_groups,
+                "groups": group_summaries,
                 "dry_run": False,
             },
         )
@@ -397,7 +398,7 @@ class DuplicateDetectionService:
             - groups: list of DuplicateGroup (only items with different metadata)
             - cross_folder_copies: int (count of skipped groups with identical metadata)
 
-        Priority: DOI > title > URL
+        Priority: DOI > title > URL(with same normalized title)
         """
         all_duplicate_groups = existing_groups or []
         existing_primary_keys = {g.primary_key for g in all_duplicate_groups}
@@ -450,15 +451,17 @@ class DuplicateDetectionService:
             for item in items_list:
                 processed_keys.add(item.get("key", ""))
 
-        # Group by URL (lowest priority)
-        url_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        # Group by URL (lowest priority), but require same normalized title to
+        # avoid false positives on generic publisher landing URLs.
+        url_groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
         for item in candidate_items:
             item_key = item.get("key", "")
             if item_key in processed_keys:
                 continue
             url = _normalize_url(item.get("data", {}).get("url"))
-            if url:
-                url_groups[url].append(item)
+            title = clean_title(item.get("data", {}).get("title", "")).lower()
+            if url and title:
+                url_groups[(url, title)].append(item)
 
         # Convert to DuplicateGroup objects
         duplicate_groups: list[DuplicateGroup] = []
@@ -469,7 +472,7 @@ class DuplicateDetectionService:
             ("title", title_groups),
             ("url", url_groups),
         ]:
-            for match_value, items_list in groups.items():
+            for match_key, items_list in groups.items():
                 if len(items_list) <= 1:
                     continue
                 if match_reason == "title":
@@ -481,6 +484,7 @@ class DuplicateDetectionService:
                     if len(normalized_dois) > 1:
                         # Same title but conflicting DOIs: treat as distinct papers.
                         continue
+                match_value = self._format_match_value(match_reason, match_key)
                 group = self._create_duplicate_group(
                     items_list, match_reason=match_reason, match_value=match_value
                 )
@@ -500,6 +504,39 @@ class DuplicateDetectionService:
         item_type = (item_data.get("itemType") or "").strip().lower()
         parent_item = (item_data.get("parentItem") or "").strip()
         return item_type not in self._excluded_item_types and not parent_item
+
+    def _format_match_value(self, match_reason: str, match_key: Any) -> str:
+        """Convert internal grouping key to user-facing match value."""
+        if match_reason == "url" and isinstance(match_key, tuple):
+            url, _normalized_title = match_key
+            return str(url)
+        return str(match_key)
+
+    def _build_group_summaries(
+        self,
+        groups: list[DuplicateGroup],
+        items: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Build structured duplicate details with keys and titles."""
+        item_map = {item.get("key", ""): item.get("data", {}) for item in items}
+
+        def _item_summary(item_key: str) -> dict[str, str]:
+            data = item_map.get(item_key, {})
+            return {
+                "key": item_key,
+                "title": str(data.get("title", "") or ""),
+                "item_type": str(data.get("itemType", "") or ""),
+            }
+
+        return [
+            {
+                "match_reason": group.match_reason,
+                "match_value": group.match_value,
+                "primary_item": _item_summary(group.primary_key),
+                "duplicate_items": [_item_summary(k) for k in group.duplicate_keys],
+            }
+            for group in groups
+        ]
 
     def _create_duplicate_group(
         self, items: list[dict[str, Any]], match_reason: str, match_value: str

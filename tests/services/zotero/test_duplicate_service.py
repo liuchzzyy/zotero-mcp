@@ -217,6 +217,19 @@ async def test_find_duplicate_groups_does_not_merge_same_title_with_different_do
 
 
 @pytest.mark.asyncio
+async def test_find_duplicate_groups_does_not_merge_same_url_with_different_titles():
+    service = DuplicateDetectionService(item_service=AsyncMock())
+    items = [
+        _api_item("U1", title="Paper One", url="https://xlink.rsc.org"),
+        _api_item("U2", title="Paper Two", url="https://xlink.rsc.org"),
+    ]
+
+    result = await service._find_duplicate_groups(items)
+
+    assert result["groups"] == []
+
+
+@pytest.mark.asyncio
 async def test_find_and_remove_duplicates_counts_delete_failures():
     item_service = AsyncMock()
     item_service.api_client.get_all_items = AsyncMock(
@@ -274,3 +287,32 @@ async def test_find_and_remove_duplicates_counts_only_parent_items_in_scan_total
     assert result["success"] is True
     assert result["total_scanned"] == 2
     assert result["duplicates_found"] == 1
+
+
+@pytest.mark.asyncio
+async def test_find_and_remove_duplicates_returns_group_titles_for_confirmation():
+    item_service = AsyncMock()
+    item_service.api_client.get_all_items = AsyncMock(
+        side_effect=[
+            [
+                _api_item("G1", doi="10.1000/group", title="Primary Title"),
+                _api_item("G2", doi="10.1000/group", title="Duplicate Title"),
+            ],
+            [],
+        ]
+    )
+    item_service.api_client.get_collection_items = AsyncMock()
+
+    service = DuplicateDetectionService(item_service=item_service)
+    result = await service.find_and_remove_duplicates(
+        scan_limit=10,
+        treated_limit=10,
+        dry_run=True,
+    )
+
+    assert result["success"] is True
+    assert len(result["groups"]) == 1
+    group = result["groups"][0]
+    assert group["primary_item"]["title"] in {"Primary Title", "Duplicate Title"}
+    duplicate_titles = {item["title"] for item in group["duplicate_items"]}
+    assert duplicate_titles <= {"Primary Title", "Duplicate Title"}
