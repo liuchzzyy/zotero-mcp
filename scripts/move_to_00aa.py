@@ -1,10 +1,12 @@
 """
-筛选 00_INBOXS_AA 中符合以下任一条件的含 PDF 附件条目，移动到 00_AA：
+把 00_INBOXS_AA 中符合以下任一条件的含 PDF 附件条目移动到 00_AA：
   1. 含有两个或以上 PDF 附件
-  2. 只有一个 PDF，且为综述文章（review article）
-  3. 只有一个 PDF，且发表时间早于 2000 年
+  2. 出版社为 Wiley、RSC、ACS 或 Elsevier（含一个 PDF）
+  3. 综述文章（review article）——先元数据启发式，不确定时调用 DeepSeek
+  4. 发表时间早于 2000 年
 
-综述识别：先用元数据启发式判断，不确定时调用 DeepSeek API。
+合并自：move_dual_pdf_to_aa.py, move_publisher_to_aa.py,
+         move_elsevier_to_aa.py, move_to_aa.py
 """
 import re
 import sys
@@ -19,6 +21,7 @@ DEEPSEEK_API_KEY = "***DEEPSEEK_API_KEY***"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 YEAR_THRESHOLD = 2000
 
+# ── 综述识别关键词 ─────────────────────────────────────────────────────────────
 REVIEW_TITLE_KEYWORDS = [
     "review", "overview", "progress", "advances in", "recent advance",
     "perspective", "survey", "roadmap", "state of the art",
@@ -30,9 +33,103 @@ REVIEW_ABSTRACT_PHRASES = [
     "is reviewed", "are reviewed",
 ]
 
-# ── 初始化 ────────────────────────────────────────────────────────────────────
-zot = zotero.Zotero(LIBRARY_ID, "user", API_KEY)
-deepseek = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
+# ── 出版社识别规则（匹配 publicationTitle / publisher / extra，不区分大小写）──
+PUBLISHER_PATTERNS = {
+    "Wiley": [
+        r"wiley",
+        r"angewandte chemie",
+        r"advanced materials",
+        r"advanced energy materials",
+        r"advanced functional materials",
+        r"advanced science",
+        r"\bsmall\b",
+        r"chemsuschem",
+        r"chemelectrochem",
+        r"chemcatchem",
+        r"chemistry[- ]+a european journal",
+        r"batteries.*supercaps",
+        r"electroanalysis",
+        r"european journal of inorganic chemistry",
+        r"european journal of organic chemistry",
+        r"macromolecular",
+    ],
+    "RSC": [
+        r"royal society of chemistry",
+        r"\brsc\b",
+        r"journal of materials chemistry",
+        r"energy.*environmental science",
+        r"physical chemistry chemical physics",
+        r"\bnanoscale\b",
+        r"green chemistry",
+        r"chemical communications",
+        r"\bchem\.?\s*comm",
+        r"dalton transactions",
+        r"rsc advances",
+        r"chemical science",
+        r"new journal of chemistry",
+        r"crystengcomm",
+        r"faraday discuss",
+        r"materials chemistry frontiers",
+        r"journal of the chemical society",
+    ],
+    "ACS": [
+        r"american chemical society",
+        r"\bacs\s+\w",
+        r"journal of the american chemical society",
+        r"\bjacs\b",
+        r"nano letters",
+        r"chemistry of materials",
+        r"journal of physical chemistry",
+        r"\blangmuir\b",
+        r"inorganic chemistry",
+        r"analytical chemistry",
+        r"environmental science.*technology",
+        r"accounts of chemical research",
+        r"crystal growth.*design",
+        r"macromolecules",
+        r"organometallics",
+        r"biochemistry",
+        r"the journal of organic chemistry",
+        r"industrial.*engineering chemistry",
+    ],
+    "Elsevier": [
+        r"\belsevier\b",
+        r"electrochimica acta",
+        r"journal of power sources",
+        r"journal of electroanalytical chemistry",
+        r"chemical engineering journal",
+        r"applied surface science",
+        r"materials today",
+        r"nano energy",
+        r"energy storage materials",
+        r"journal of alloys and compounds",
+        r"ceramics international",
+        r"solid state ionics",
+        r"carbon",
+        r"journal of colloid and interface science",
+        r"chemical physics letters",
+        r"electrochemistry communications",
+        r"international journal of hydrogen energy",
+        r"applied energy",
+        r"journal of energy storage",
+        r"journal of membrane science",
+        r"materials letters",
+        r"scripta materialia",
+        r"acta materialia",
+        r"journal of solid state chemistry",
+        r"coordination chemistry reviews",
+        r"progress in natural science",
+        r"chinese chemical letters",
+        r"journal of hazardous materials",
+        r"chemosphere",
+    ],
+}
+
+# 编译正则
+COMPILED = {
+    pub: [re.compile(p, re.IGNORECASE) for p in patterns]
+    for pub, patterns in PUBLISHER_PATTERNS.items()
+}
 
 
 # ── 工具函数 ──────────────────────────────────────────────────────────────────
@@ -42,28 +139,41 @@ def extract_year(item: dict) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def detect_publisher(item: dict) -> tuple[str | None, str | None]:
+    """返回 (出版社名, 匹配字段)，匹配不到返回 (None, None)。"""
+    fields = [
+        item["data"].get("publicationTitle", ""),
+        item["data"].get("publisher", ""),
+        item["data"].get("extra", ""),
+    ]
+    text = " | ".join(fields)
+    for pub, regexes in COMPILED.items():
+        for rx in regexes:
+            if rx.search(text):
+                matched = (item["data"].get("publicationTitle")
+                           or item["data"].get("publisher", ""))
+                return pub, matched[:50]
+    return None, None
+
+
 def is_review_by_metadata(item: dict) -> tuple[bool, str | None]:
-    """用元数据启发式判断是否为综述，不确定则返回 (False, None)。"""
+    """元数据启发式判断是否为综述，不确定则返回 (False, None)。"""
     title = item["data"].get("title", "").lower()
     extra = item["data"].get("extra", "").lower()
     abstract = item["data"].get("abstractNote", "").lower()
 
-    # extra 字段（从数据库导入时常有 "Type: Review"）
     if re.search(r"\btype\s*:\s*review\b", extra):
         return True, "extra: Type=Review"
 
-    # 标题关键词
     for kw in REVIEW_TITLE_KEYWORDS:
         if kw in title:
             return True, f"标题含 '{kw}'"
 
-    # 摘要前 400 字符
     snippet = abstract[:400]
     for phrase in REVIEW_ABSTRACT_PHRASES:
         if phrase in snippet:
             return True, f"摘要含 '{phrase}'"
 
-    # 期刊名含 review
     journal = item["data"].get("publicationTitle", "").lower()
     if "review" in journal or "reviews" in journal:
         return True, f"期刊名含 review ({journal[:40]})"
@@ -71,8 +181,8 @@ def is_review_by_metadata(item: dict) -> tuple[bool, str | None]:
     return False, None
 
 
-def is_review_by_deepseek(item: dict) -> bool:
-    """调用 DeepSeek API 判断是否为综述（仅在元数据无法确定时使用）。"""
+def is_review_by_deepseek(item: dict, client: OpenAI) -> bool:
+    """调用 DeepSeek 判断是否为综述（仅在元数据无法确定时使用）。"""
     title = item["data"].get("title", "（无标题）")
     abstract = item["data"].get("abstractNote", "")
     journal = item["data"].get("publicationTitle", "")
@@ -88,7 +198,7 @@ def is_review_by_deepseek(item: dict) -> bool:
         "只回答 YES 或 NO，不要解释。"
     )
     try:
-        resp = deepseek.chat.completions.create(
+        resp = client.chat.completions.create(
             model="deepseek-chat",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=5,
@@ -101,7 +211,7 @@ def is_review_by_deepseek(item: dict) -> bool:
         return False
 
 
-def move_item(item: dict, inbox_key: str, aa_key: str) -> bool:
+def move_item(zot, item: dict, inbox_key: str, aa_key: str) -> bool:
     current_cols = item["data"].get("collections", [])
     new_cols = list(set(current_cols + [aa_key]) - {inbox_key})
     try:
@@ -118,6 +228,9 @@ def move_item(item: dict, inbox_key: str, aa_key: str) -> bool:
 
 # ── 主流程 ────────────────────────────────────────────────────────────────────
 def main():
+    zot = zotero.Zotero(LIBRARY_ID, "user", API_KEY)
+    deepseek = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
+
     # 1. 获取 collections
     print("正在获取 collections...")
     col_map = {c["data"]["name"]: c["key"]
@@ -128,11 +241,12 @@ def main():
         sys.exit(f"❌ 找不到所需 collection。现有: {sorted(col_map.keys())}")
     print(f"✅ 00_INBOXS_AA={inbox_key}, 00_AA={aa_key}\n")
 
-    # 2. 获取所有条目
+    # 2. 获取所有非附件/非笔记条目
     print("正在获取条目...")
-    items = zot.everything(zot.collection_items(inbox_key, itemType="-attachment"))
+    raw = zot.everything(zot.collection_items(inbox_key, itemType="-attachment"))
+    items = [i for i in raw if i["data"].get("itemType") != "note"]
     total = len(items)
-    print(f"共 {total} 个条目\n{'─'*60}")
+    print(f"共 {total} 个条目\n{'─'*65}")
 
     results = {"moved": [], "skipped_no_pdf": [], "skipped_no_match": []}
     deepseek_calls = 0
@@ -160,13 +274,19 @@ def main():
         if pdf_count >= 2:
             reason = f"{pdf_count} 个PDF"
 
-        # 条件 3：发表时间早于 2000
+        # 条件 4：发表时间早于 2000
         if reason is None:
             year = extract_year(item)
             if year is not None and year < YEAR_THRESHOLD:
                 reason = f"发表于 {year} 年"
 
-        # 条件 2：综述文章
+        # 条件 2：出版社匹配（Wiley / RSC / ACS / Elsevier）
+        if reason is None:
+            pub, journal = detect_publisher(item)
+            if pub:
+                reason = f"{pub} ({journal})"
+
+        # 条件 3：综述文章（元数据 → DeepSeek）
         if reason is None:
             is_rev, meta_reason = is_review_by_metadata(item)
             if is_rev:
@@ -174,12 +294,12 @@ def main():
             else:
                 print(f"{prefix} 🤖 DeepSeek 判断中: {title}")
                 deepseek_calls += 1
-                if is_review_by_deepseek(item):
+                if is_review_by_deepseek(item, deepseek):
                     reason = "综述（DeepSeek）"
 
         if reason:
-            print(f"{prefix} ✅ 符合【{reason}】: {title}")
-            ok = move_item(item, inbox_key, aa_key)
+            print(f"{prefix} ✅ 【{reason}】: {title}")
+            ok = move_item(zot, item, inbox_key, aa_key)
             if ok:
                 results["moved"].append((key, title, reason))
         else:
@@ -187,7 +307,7 @@ def main():
             results["skipped_no_match"].append(key)
 
     # 汇总
-    print(f"\n{'═'*60}")
+    print(f"\n{'═'*65}")
     print(f"完成！DeepSeek 共调用 {deepseek_calls} 次")
     print(f"  ✅ 已移动到 00_AA : {len(results['moved'])} 条")
     print(f"  ⏭️  无PDF跳过     : {len(results['skipped_no_pdf'])} 条")
