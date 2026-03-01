@@ -615,8 +615,7 @@ class MetadataUpdateService:
             )
             if isinstance(raw_items, int) or not isinstance(raw_items, list):
                 return []
-            parent_items = [item for item in raw_items if self._is_parent_api_item(item)]
-            return [api_item_to_search_result(item) for item in parent_items]
+            return [api_item_to_search_result(item) for item in raw_items]
 
         return _fetch_page
 
@@ -636,17 +635,9 @@ class MetadataUpdateService:
             )
             if isinstance(raw_items, int) or not isinstance(raw_items, list):
                 return []
-            parent_items = [item for item in raw_items if self._is_parent_api_item(item)]
-            return [api_item_to_search_result(item) for item in parent_items]
+            return [api_item_to_search_result(item) for item in raw_items]
 
         return _fetch_page
-
-    def _is_parent_api_item(self, item: dict[str, Any]) -> bool:
-        """Check parent-item eligibility from raw API payload."""
-        data = item.get("data", {})
-        item_type = str(data.get("itemType", "")).strip().lower()
-        parent_item = str(data.get("parentItem") or "").strip()
-        return item_type not in _SKIPPED_ITEM_TYPES and not parent_item
 
     def _is_parent_candidate(self, item: Any) -> bool:
         """Check parent-item eligibility from SearchResultItem-like object."""

@@ -22,6 +22,7 @@ def api_item_to_search_result(item: dict[str, Any]) -> SearchResultItem:
         abstract=data.get("abstractNote"),
         doi=data.get("DOI"),
         tags=tags or [],
+        raw_data=data,
     )
 
 

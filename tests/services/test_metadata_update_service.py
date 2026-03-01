@@ -251,6 +251,40 @@ async def test_update_all_items_skips_parent_item_children():
     update_item_metadata_mock.assert_awaited_once_with("A1", dry_run=True)
 
 
+@pytest.mark.asyncio
+async def test_update_all_items_collection_pagination_not_stopped_by_parent_filter():
+    """Should continue paging by raw batch size, not filtered parent count."""
+    item_service = AsyncMock()
+    metadata_service = AsyncMock()
+    service = MetadataUpdateService(item_service, metadata_service)
+
+    item_service.get_sorted_collections.return_value = [{"key": "COLL1"}]
+    first_page = [_api_item(f"ATT{i}", item_type="attachment") for i in range(99)]
+    first_page.append(_api_item("P1", item_type="journalArticle"))
+    second_page = [
+        _api_item("C1", item_type="journalArticle", parent_item="PARENT1"),
+        _api_item("P2", item_type="journalArticle"),
+    ]
+    item_service.api_client.get_collection_items.side_effect = [
+        first_page,
+        second_page,
+    ]
+    update_item_metadata_mock = AsyncMock(
+        return_value={"success": True, "updated": False}
+    )
+    with patch.object(service, "update_item_metadata", update_item_metadata_mock):
+        result = await service.update_all_items(
+            scan_limit=100,
+            treated_limit=10,
+            dry_run=True,
+            include_unfiled=False,
+        )
+
+    assert result["total"] == 2
+    assert result["processed_candidates"] == 2
+    assert update_item_metadata_mock.await_count == 2
+
+
 def test_build_updated_item_data_skips_periodical_fields_for_book():
     """Book items should not be assigned journal-only fields."""
     item_service = AsyncMock()
