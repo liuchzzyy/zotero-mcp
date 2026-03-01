@@ -611,6 +611,61 @@ def route_shortterms() -> None:
     _print_summary(stats)
 
 
+def recheck_bb() -> None:
+    """
+    Re-check items in BB with DeepSeek.
+      Still review  → stay in BB
+      Not review    → move to CC
+    """
+    print('=' * 70)
+    print('  重新检测 00_INBOXS_BB 综述状态')
+    print('=' * 70)
+    stats: Counter = Counter()
+
+    items = fetch_bib_items(BB_KEY)
+    print(f'\n00_INBOXS_BB: {len(items)} 个条目\n')
+
+    for idx, item in enumerate(items, 1):
+        key   = item['key']
+        title = re.sub(r'<[^>]+>', '', item['data'].get('title', '(无标题)'))[:55]
+        year  = item['data'].get('date', '')[:4]
+        print(f'\n[{idx:04d}/{len(items)}] [{key}] ({year}) {title}')
+
+        pdfs, texts = get_item_pdfs(key)
+        n_pdfs = len(pdfs)
+        print(f'  PDFs: {n_pdfs}')
+
+        if n_pdfs == 0:
+            print('  ⚠️  无PDF，跳过')
+            stats['skip'] += 1
+            time.sleep(0.1)
+            continue
+
+        # Use first PDF for classification
+        pdf_text = texts[0]
+        if pdf_text:
+            print(f'  PDF文本: {len(pdf_text)} 字符 (前3页)')
+        else:
+            fname = pdfs[0]['data'].get('filename', '?')
+            print(f'  ⚠️  无法提取PDF文本: {fname}')
+
+        print('  🤖 DeepSeek 分类中...')
+        pdf_type = classify_pdf_type(pdf_text)
+        print(f'  → 类型: {pdf_type}')
+
+        if pdf_type == 'review':
+            stats['stay_BB'] += 1
+            print('  ✓ 保留在 00_INBOXS_BB (综述)')
+        else:
+            ok = move_item(key, BB_KEY, CC_KEY)
+            stats['BB→CC'] += 1
+            print(f'  {"✅" if ok else "❌"} 移到 00_INBOXS_CC ({pdf_type})')
+
+        time.sleep(0.3)
+
+    _print_summary(stats)
+
+
 def recheck_dd_cc() -> None:
     """
     Re-check duplicate detection for items in DD and CC.
@@ -667,7 +722,10 @@ def recheck_dd_cc() -> None:
 
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1 and sys.argv[1] == 'recheck':
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ''
+    if cmd == 'recheck':
         recheck_dd_cc()
+    elif cmd == 'recheck_bb':
+        recheck_bb()
     else:
         route_shortterms()
