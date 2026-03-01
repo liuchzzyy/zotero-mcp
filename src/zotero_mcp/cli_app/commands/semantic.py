@@ -6,14 +6,25 @@ import argparse
 import json
 import os
 from pathlib import Path
+from typing import Literal
 
 from zotero_mcp.cli_app.common import (
+    add_all_arg,
     add_output_arg,
     add_scan_limit_arg,
     add_treated_limit_arg,
 )
 from zotero_mcp.cli_app.output import emit
 from zotero_mcp.utils.config import load_config
+
+IncludeField = Literal[
+    "documents",
+    "embeddings",
+    "metadatas",
+    "distances",
+    "uris",
+    "data",
+]
 
 
 def _save_zotero_db_path_to_config(config_path: Path, db_path: str) -> None:
@@ -24,8 +35,10 @@ def _save_zotero_db_path_to_config(config_path: Path, db_path: str) -> None:
         try:
             with open(config_path, encoding="utf-8") as f:
                 full_config = json.load(f)
-        except Exception:
-            full_config = {}
+        except Exception as exc:
+            raise ValueError(
+                f"Failed to parse config at {config_path}: {exc}"
+            ) from exc
 
     full_config.setdefault("semantic_search", {})
     full_config["semantic_search"]["zotero_db_path"] = db_path
@@ -63,6 +76,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         default=100,
         help_text="Maximum total number of items to process (default: 100)",
     )
+    add_all_arg(db_update)
     db_update.add_argument(
         "--no-fulltext",
         action="store_true",
@@ -118,11 +132,12 @@ def run(args: argparse.Namespace) -> int:
         stats = search.update_database(
             force_full_rebuild=args.force_rebuild,
             scan_limit=args.scan_limit,
-            treated_limit=args.treated_limit,
+            treated_limit=None if args.all else args.treated_limit,
             extract_fulltext=not args.no_fulltext,
         )
-        emit(args, {"operation": "db-update", "stats": stats})
-        return 0
+        failed = bool(stats.get("error")) if isinstance(stats, dict) else True
+        emit(args, {"operation": "db-update", "stats": stats, "success": not failed})
+        return 1 if failed else 0
 
     if args.subcommand == "db-status":
         search = create_semantic_search(args.config_path)
@@ -137,7 +152,11 @@ def run(args: argparse.Namespace) -> int:
             emit(args, {"count": col.count()})
             return 0
 
-        include = ["metadatas", "documents"] if args.show_documents else ["metadatas"]
+        include: list[IncludeField]
+        if args.show_documents:
+            include = ["metadatas", "documents"]
+        else:
+            include = ["metadatas"]
         records: list[dict] = []
 
         if args.filter_text:
@@ -145,26 +164,33 @@ def run(args: argparse.Namespace) -> int:
             target_field = field_map[args.filter_field]
             needle = args.filter_text.lower()
             fetch_limit = max(args.limit * 10, 500)
-            results = col.get(limit=fetch_limit, include=include)
-            metadatas = results.get("metadatas") or []
-            documents = results.get("documents") or []
-            for i, meta in enumerate(metadatas):
-                val = meta.get(target_field, "")
-                if needle not in str(val).lower():
-                    continue
-                row = {"title": meta.get("title", "Untitled"), "metadata": meta}
-                if args.show_documents and documents:
-                    row["document_preview"] = documents[i][:100]
-                records.append(row)
-                if len(records) >= args.limit:
+            total_count = col.count()
+            offset = 0
+            while offset < total_count and len(records) < args.limit:
+                results = col.get(limit=fetch_limit, offset=offset, include=include)
+                metadatas = results.get("metadatas") or []
+                documents = results.get("documents") or []
+                if not metadatas:
                     break
+
+                for i, meta in enumerate(metadatas):
+                    val = meta.get(target_field, "")
+                    if needle not in str(val).lower():
+                        continue
+                    row = {"title": meta.get("title", "Untitled"), "metadata": meta}
+                    if args.show_documents and i < len(documents):
+                        row["document_preview"] = documents[i][:100]
+                    records.append(row)
+                    if len(records) >= args.limit:
+                        break
+                offset += len(metadatas)
         else:
             results = col.get(limit=args.limit, include=include)
             metadatas = results.get("metadatas") or []
             documents = results.get("documents") or []
             for i, meta in enumerate(metadatas):
                 row = {"title": meta.get("title", "Untitled"), "metadata": meta}
-                if args.show_documents and documents:
+                if args.show_documents and i < len(documents):
                     row["document_preview"] = documents[i][:100]
                 records.append(row)
 

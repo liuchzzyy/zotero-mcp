@@ -364,7 +364,10 @@ class CrossrefClient:
                 params={
                     "query.title": title,
                     "rows": rows,
-                    "select": "DOI,title,author,container-title,published,volume,issue,page,abstract,URL,ISSN,publisher,type",
+                    "select": (
+                        "DOI,title,author,container-title,published,volume,issue,"
+                        "page,abstract,URL,ISSN,publisher,type"
+                    ),
                 },
             )
             response.raise_for_status()
@@ -479,11 +482,15 @@ class CrossrefClient:
 
         if best_work and best_score >= threshold:
             logger.info(
-                f"Best Crossref match: '{best_work.title[:50]}...' (score: {best_score:.2f})"
+                "Best Crossref match: '%s...' (score: %.2f)",
+                best_work.title[:50],
+                best_score,
             )
             return best_work
 
         logger.warning(
-            f"No good Crossref match for '{title[:50]}...' (best score: {best_score:.2f})"
+            "No good Crossref match for '%s...' (best score: %.2f)",
+            title[:50],
+            best_score,
         )
         return None

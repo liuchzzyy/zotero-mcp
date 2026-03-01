@@ -105,7 +105,7 @@ class BatchAnalyzeInput(BaseInput):
         default=True,
         description="Whether to extract and include PDF images/tables",
     )
-    llm_provider: Literal["deepseek"] = Field(
+    llm_provider: Literal["auto", "deepseek"] = Field(
         default="deepseek",
         description="LLM provider to use for analysis",
     )

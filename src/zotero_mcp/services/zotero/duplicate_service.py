@@ -21,7 +21,11 @@ from zotero_mcp.services.common.operation_result import (
 )
 from zotero_mcp.services.common.pagination import iter_offset_batches
 from zotero_mcp.services.common.retry import async_retry_with_backoff
-from zotero_mcp.services.zotero.item_service import ItemService
+from zotero_mcp.services.zotero.item_service import (
+    ItemService,
+    _normalize_doi,
+    _normalize_url,
+)
 from zotero_mcp.utils.formatting.helpers import clean_title
 
 logger = logging.getLogger(__name__)
@@ -67,8 +71,9 @@ def _item_to_dict(item: dict[str, Any]) -> dict[str, Any]:
             "place": data.get("place"),
             "extra": data.get("extra"),
             "ISSN": data.get("ISSN"),
+            "numChildren": data.get("numChildren"),
         },
-        "children": [],
+        "children": item.get("children", []),
     }
 
 
@@ -92,7 +97,7 @@ class DuplicateDetectionService:
         self,
         collection_key: str | None = None,
         scan_limit: int = 500,
-        treated_limit: int = 1000,
+        treated_limit: int | None = 1000,
         dry_run: bool = False,
     ) -> dict[str, Any]:
         """
@@ -150,7 +155,10 @@ class DuplicateDetectionService:
         cross_folder_copies = group_result["cross_folder_copies"]
         total_duplicates_found = sum(len(g.duplicate_keys) for g in duplicate_groups)
 
-        if total_duplicates_found > params.treated_limit:
+        if (
+            params.treated_limit is not None
+            and total_duplicates_found > params.treated_limit
+        ):
             logger.info(
                 "⛔ Reached limit "
                 f"({params.treated_limit} duplicates), trimming results"
@@ -404,9 +412,9 @@ class DuplicateDetectionService:
             item_key = item.get("key", "")
             if item_key in already_grouped:
                 continue
-            doi = (item.get("data", {}).get("DOI") or "").strip()
+            doi = _normalize_doi(item.get("data", {}).get("DOI"))
             if doi:
-                doi_groups[doi.lower()].append(item)
+                doi_groups[doi].append(item)
 
         # Track keys already matched by DOI
         processed_keys = set(already_grouped)
@@ -427,9 +435,18 @@ class DuplicateDetectionService:
 
         # Track keys matched by title
         for items_list in title_groups.values():
-            if len(items_list) > 1:
-                for item in items_list:
-                    processed_keys.add(item.get("key", ""))
+            if len(items_list) <= 1:
+                continue
+            normalized_dois = {
+                _normalize_doi(item.get("data", {}).get("DOI"))
+                for item in items_list
+                if _normalize_doi(item.get("data", {}).get("DOI"))
+            }
+            if len(normalized_dois) > 1:
+                # Do not deduplicate by title when explicit DOI conflicts.
+                continue
+            for item in items_list:
+                processed_keys.add(item.get("key", ""))
 
         # Group by URL (lowest priority)
         url_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -437,7 +454,7 @@ class DuplicateDetectionService:
             item_key = item.get("key", "")
             if item_key in processed_keys:
                 continue
-            url = (item.get("data", {}).get("url") or "").strip()
+            url = _normalize_url(item.get("data", {}).get("url"))
             if url:
                 url_groups[url].append(item)
 
@@ -453,13 +470,22 @@ class DuplicateDetectionService:
             for match_value, items_list in groups.items():
                 if len(items_list) <= 1:
                     continue
+                if match_reason == "title":
+                    normalized_dois = {
+                        _normalize_doi(item.get("data", {}).get("DOI"))
+                        for item in items_list
+                        if _normalize_doi(item.get("data", {}).get("DOI"))
+                    }
+                    if len(normalized_dois) > 1:
+                        # Same title but conflicting DOIs: treat as distinct papers.
+                        continue
                 group = self._create_duplicate_group(
                     items_list, match_reason=match_reason, match_value=match_value
                 )
                 if group:
                     duplicate_groups.append(group)
                 else:
-                    cross_folder_copies += 1
+                    cross_folder_copies += max(1, len(items_list) - 1)
 
         return {
             "groups": duplicate_groups,
@@ -521,6 +547,11 @@ class DuplicateDetectionService:
         children = item.get("children", [])
         if children:
             score += 100 + len(children) * 10
+        else:
+            # Keep child-presence signal when only child count metadata is available.
+            num_children = item_data.get("numChildren")
+            if isinstance(num_children, int) and num_children > 0:
+                score += 100 + num_children * 10
 
         # Has DOI
         if item_data.get("DOI"):

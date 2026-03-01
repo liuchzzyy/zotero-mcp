@@ -8,7 +8,7 @@ import asyncio
 import logging
 import os
 import re
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlsplit, urlunsplit
 
 from zotero_mcp.clients.zotero import LocalDatabaseClient, ZoteroAPIClient
@@ -113,17 +113,24 @@ class ItemService:
     ) -> list[SearchResultItem]:
         """Get all items in the library."""
         if self.local_client:
-            fetch_limit = limit + max(start, 0) if start else limit
-            local_items = self.local_client.get_items(
-                limit=fetch_limit, include_fulltext=False
-            )
             if item_type:
-                local_items = [
-                    item for item in local_items if item.item_type == item_type
+                # Apply item-type filtering before paging to avoid dropped results.
+                all_items = self.local_client.get_items(
+                    limit=None,
+                    include_fulltext=False,
+                )
+                filtered_items = [
+                    item for item in all_items if item.item_type == item_type
                 ]
-            if start:
-                local_items = local_items[start:]
-            local_items = local_items[:limit]
+                local_items = filtered_items[start : start + limit]
+            else:
+                fetch_limit = limit + max(start, 0) if start else limit
+                local_items = self.local_client.get_items(
+                    limit=fetch_limit, include_fulltext=False
+                )
+                if start:
+                    local_items = local_items[start:]
+                local_items = local_items[:limit]
             return [zotero_item_to_search_result(item) for item in local_items]
 
         api_items = await self.api_client.get_all_items(
@@ -539,7 +546,7 @@ class ItemService:
     async def _search_items_cached(
         self,
         query: str,
-        qmode: str,
+        qmode: Literal["titleCreatorYear", "everything"],
         limit: int,
         search_cache: dict[tuple[str, str, int], list[dict[str, Any]]],
     ) -> list[dict[str, Any]]:
@@ -584,9 +591,15 @@ class ItemService:
             raise metadata
         bundle["metadata"] = metadata
 
-        children = result_map.get("children")
-        if isinstance(children, Exception):
-            logger.warning(f"Failed to load children for {item_key}: {children}")
+        children_result = result_map.get("children")
+        if isinstance(children_result, Exception):
+            logger.warning(
+                f"Failed to load children for {item_key}: {children_result}"
+            )
+            children: list[dict[str, Any]] = []
+        elif isinstance(children_result, list):
+            children = [c for c in children_result if isinstance(c, dict)]
+        else:
             children = []
         bundle["attachments"] = [
             c for c in children if c.get("data", {}).get("itemType") == "attachment"

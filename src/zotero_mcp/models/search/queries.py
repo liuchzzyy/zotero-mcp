@@ -20,11 +20,17 @@ class SearchItemsInput(PaginatedInput):
     )
     qmode: SearchMode = Field(
         default=SearchMode.TITLE_CREATOR_YEAR,
-        description="Search mode: 'titleCreatorYear' searches title/author/year, 'everything' searches all fields",
+        description=(
+            "Search mode: 'titleCreatorYear' searches title/author/year, "
+            "'everything' searches all fields"
+        ),
     )
     item_type: str = Field(
         default="-attachment",
-        description="Item type filter. Use '-' prefix to exclude (e.g., '-attachment', '-note')",
+        description=(
+            "Item type filter. Use '-' prefix to exclude "
+            "(e.g., '-attachment', '-note')"
+        ),
     )
     tags: list[str] | None = Field(
         default=None, description="Filter by tags. Items must have all specified tags."
@@ -70,7 +76,10 @@ class AdvancedSearchCondition(BaseInput):
 
     field: str = Field(
         ...,
-        description="Field to search (e.g., 'title', 'creator', 'date', 'abstractNote')",
+        description=(
+            "Field to search "
+            "(e.g., 'title', 'creator', 'date', 'abstractNote')"
+        ),
     )
     operation: Literal[
         "contains", "is", "isNot", "beginsWith", "isLessThan", "isGreaterThan"

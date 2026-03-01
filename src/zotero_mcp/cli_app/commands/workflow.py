@@ -8,6 +8,7 @@ import sys
 from typing import Any
 
 from zotero_mcp.cli_app.common import (
+    add_all_arg,
     add_output_arg,
     add_scan_limit_arg,
     add_treated_limit_arg,
@@ -29,6 +30,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         default=20,
         help_text="Maximum total items to process (default: 20)",
     )
+    add_all_arg(item_analysis)
     item_analysis.add_argument(
         "--target-collection",
         required=True,
@@ -42,9 +44,9 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     )
     item_analysis.add_argument(
         "--llm-provider",
-        choices=["deepseek"],
+        choices=["auto", "deepseek"],
         default="deepseek",
-        help="LLM provider for analysis (default: deepseek)",
+        help="LLM provider for analysis (default: deepseek; auto selects by content)",
     )
     item_analysis.add_argument(
         "--source-collection",
@@ -65,7 +67,14 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     metadata.add_argument("--collection", help="Limit to specific collection (by key)")
     add_scan_limit_arg(metadata, default=500)
     add_treated_limit_arg(metadata)
+    add_all_arg(metadata)
     metadata.add_argument("--item-key", help="Update a specific item by key")
+    metadata.add_argument(
+        "--include-unfiled",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Include unfiled/root items when scanning full library (default: enabled)",
+    )
     metadata.add_argument(
         "--dry-run",
         action=argparse.BooleanOptionalAction,
@@ -84,6 +93,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         default=100,
         help_text="Maximum total number of items to scan (default: 100)",
     )
+    add_all_arg(dedup)
     dedup.add_argument(
         "--dry-run",
         action=argparse.BooleanOptionalAction,
@@ -98,7 +108,7 @@ async def _run_item_analysis(args: argparse.Namespace) -> dict[str, Any]:
     scanner = GlobalScanner()
     return await scanner.scan_and_process(
         scan_limit=args.scan_limit,
-        treated_limit=args.treated_limit,
+        treated_limit=None if args.all else args.treated_limit,
         target_collection=args.target_collection,
         dry_run=args.dry_run,
         llm_provider=args.llm_provider,
@@ -125,8 +135,9 @@ async def _run_metadata_update(args: argparse.Namespace) -> dict[str, Any]:
     return await update_service.update_all_items(
         collection_key=args.collection,
         scan_limit=args.scan_limit,
-        treated_limit=args.treated_limit,
+        treated_limit=None if args.all else args.treated_limit,
         dry_run=args.dry_run,
+        include_unfiled=args.include_unfiled,
     )
 
 
@@ -139,7 +150,7 @@ async def _run_deduplicate(args: argparse.Namespace) -> dict[str, Any]:
     return await service.find_and_remove_duplicates(
         collection_key=args.collection,
         scan_limit=args.scan_limit,
-        treated_limit=args.treated_limit,
+        treated_limit=None if args.all else args.treated_limit,
         dry_run=args.dry_run,
     )
 

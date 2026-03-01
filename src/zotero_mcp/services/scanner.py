@@ -64,13 +64,19 @@ class GlobalScanner:
         """
         # Skip child/non-library items early to avoid invalid children requests.
         item_type = ""
-        if hasattr(item, "data") and isinstance(item.data, dict):
-            item_type = str(item.data.get("itemType") or "").strip().lower()
+        item_data = getattr(item, "data", {})
+        if isinstance(item_data, dict):
+            item_type = str(item_data.get("itemType") or "").strip().lower()
+        if not item_type:
+            item_type = str(getattr(item, "item_type", "") or "").strip().lower()
         if item_type in NON_ANALYZABLE_ITEM_TYPES:
             return False
 
         # Check for AI分析 tag
-        tags = item.data.get("tags", []) if hasattr(item, "data") else []
+        if isinstance(item_data, dict):
+            tags = item_data.get("tags", getattr(item, "tags", []))
+        else:
+            tags = getattr(item, "tags", [])
         has_ai_tag = any(
             tag.get("tag") == AI_ANALYSIS_TAG
             if isinstance(tag, dict)
@@ -97,10 +103,10 @@ class GlobalScanner:
     async def scan_and_process(
         self,
         scan_limit: int = 100,
-        treated_limit: int = 20,
+        treated_limit: int | None = 20,
         target_collection: str = "",
         dry_run: bool = False,
-        llm_provider: str = "deepseek",
+        llm_provider: Literal["auto", "deepseek"] = "deepseek",
         source_collection: str | None = "00_INBOXS",
         include_multimodal: bool = True,
         template: Literal["research", "review", "auto"] = "auto",
@@ -111,16 +117,16 @@ class GlobalScanner:
         Multi-stage strategy:
         1. Scan items in source_collection (default: 00_INBOXS)
         2. If need more items, scan all other collections
-        3. Accumulate candidates until reaching treated_limit
+        3. Accumulate candidates until reaching treated_limit (or all if None)
         4. Filter to items with PDFs but lacking "AI分析" tag
         5. Process up to `treated_limit` items
 
         Args:
             scan_limit: Number of items to fetch per batch from API
-            treated_limit: Maximum total number of items to process
+            treated_limit: Maximum total number of items to process (None = all)
             target_collection: Collection name to move items after analysis
             dry_run: Preview only, no changes
-            llm_provider: LLM provider for analysis (auto/claude-cli/deepseek)
+            llm_provider: LLM provider for analysis (auto/deepseek)
             source_collection: Priority collection to scan first (default: 00_INBOXS)
             template: Analysis template alias (research/review/auto)
 
@@ -176,46 +182,69 @@ class GlobalScanner:
                 )
 
                 if collections:
-                    collection_key = collections[0]["key"]
-                    coll_name = collections[0].get("data", {}).get("name", "")
-
-                    # Fetch from source collection until exhausted or reaching cap.
-                    try:
-                        async for offset, items in iter_offset_batches(
-                            lambda start, limit: self._get_collection_items_with_retry(
-                                collection_key, start=start, limit=limit
-                            ),
-                            batch_size=params.scan_limit,
-                        ):
-                            if len(candidates) >= params.treated_limit:
-                                break
-                            total_scanned += len(items)
-                            logger.info(
-                                "Fetched "
-                                f"{len(items)} items from '{coll_name}' "
-                                f"(offset: {offset})"
-                            )
-
-                            # Find candidates in this batch
-                            for item in items:
-                                scanned_keys.add(item.key)
-                                if await self._check_item_needs_analysis(item):
-                                    candidates.append(item)
-                                    logger.info(
-                                        "  ✓ Candidate: "
-                                        f"{item.title[:60]}... (key: {item.key})"
-                                    )
-                                    if len(candidates) >= params.treated_limit:
-                                        break
-                    except Exception as e:
+                    first_collection = collections[0]
+                    collection_key = first_collection.get("key") or (
+                        first_collection.get("data", {}).get("key")
+                    )
+                    coll_name = first_collection.get("data", {}).get("name", "")
+                    if not collection_key:
                         logger.warning(
-                            "Stage 1 scan for collection '%s' "
-                            "stopped after retries: %s",
-                            coll_name,
-                            e,
+                            "Collection '%s' missing key, skipping to Stage 2",
+                            params.source_collection,
                         )
-                    if len(candidates) < params.treated_limit:
-                        logger.info(f"  Collection '{coll_name}' fully scanned")
+                        collections = []
+                        collection_key = None
+                    else:
+                        # Fetch from source collection until exhausted or reaching cap.
+                        try:
+                            async def fetch_page(start: int, limit: int) -> list[Any]:
+                                return await self._get_collection_items_with_retry(
+                                    collection_key,
+                                    start=start,
+                                    limit=limit,
+                                )
+                            async for offset, items in iter_offset_batches(
+                                fetch_page,
+                                batch_size=params.scan_limit,
+                            ):
+                                if (
+                                    params.treated_limit is not None
+                                    and len(candidates) >= params.treated_limit
+                                ):
+                                    break
+                                total_scanned += len(items)
+                                logger.info(
+                                    "Fetched "
+                                    f"{len(items)} items from '{coll_name}' "
+                                    f"(offset: {offset})"
+                                )
+
+                                # Find candidates in this batch
+                                for item in items:
+                                    scanned_keys.add(item.key)
+                                    if await self._check_item_needs_analysis(item):
+                                        candidates.append(item)
+                                        logger.info(
+                                            "  ✓ Candidate: "
+                                            f"{item.title[:60]}... (key: {item.key})"
+                                        )
+                                        if (
+                                            params.treated_limit is not None
+                                            and len(candidates) >= params.treated_limit
+                                        ):
+                                            break
+                        except Exception as e:
+                            logger.warning(
+                                "Stage 1 scan for collection '%s' "
+                                "stopped after retries: %s",
+                                coll_name,
+                                e,
+                            )
+                        if (
+                            params.treated_limit is None
+                            or len(candidates) < params.treated_limit
+                        ):
+                            logger.info(f"  Collection '{coll_name}' fully scanned")
                 else:
                     logger.warning(
                         f"Collection '{params.source_collection}' not found, "
@@ -225,8 +254,12 @@ class GlobalScanner:
                 logger.info("No source collection specified, skipping to Stage 2")
 
             # Stage 2: If need more candidates, scan other collections in order
-            if len(candidates) < params.treated_limit:
-                remaining_needed = params.treated_limit - len(candidates)
+            if params.treated_limit is None or len(candidates) < params.treated_limit:
+                remaining_needed = (
+                    "all remaining"
+                    if params.treated_limit is None
+                    else params.treated_limit - len(candidates)
+                )
                 logger.info(
                     "Stage 2: Need "
                     f"{remaining_needed} more items, scanning collections in order"
@@ -238,11 +271,16 @@ class GlobalScanner:
                 # Skip source_collection if specified
                 source_key = None
                 if params.source_collection and collections:
-                    source_key = collections[0]["key"]
+                    source_key = collections[0].get("key") or collections[0].get(
+                        "data", {}
+                    ).get("key")
 
                 for coll in sorted_collections:
                     # Check if we've reached the limit
-                    if len(candidates) >= params.treated_limit:
+                    if (
+                        params.treated_limit is not None
+                        and len(candidates) >= params.treated_limit
+                    ):
                         break
 
                     coll_key = coll["key"]
@@ -269,7 +307,10 @@ class GlobalScanner:
                             ),
                             batch_size=params.scan_limit,
                         ):
-                            if len(candidates) >= params.treated_limit:
+                            if (
+                                params.treated_limit is not None
+                                and len(candidates) >= params.treated_limit
+                            ):
                                 break
                             collection_scanned += len(items)
                             total_scanned += len(items)
@@ -288,7 +329,10 @@ class GlobalScanner:
                                         "  ✓ Candidate: "
                                         f"{item.title[:60]}... (key: {item.key})"
                                     )
-                                    if len(candidates) >= params.treated_limit:
+                                    if (
+                                        params.treated_limit is not None
+                                        and len(candidates) >= params.treated_limit
+                                    ):
                                         break
                     except Exception as e:
                         logger.warning(

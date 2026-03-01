@@ -1,7 +1,6 @@
 """
 把 00_INBOXS_AA 中含有两个 PDF 附件的条目移动到 00_AA
 """
-import os
 from pyzotero import zotero
 
 LIBRARY_ID = "5452188"

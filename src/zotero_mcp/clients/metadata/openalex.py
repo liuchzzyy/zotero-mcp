@@ -565,11 +565,15 @@ class OpenAlexClient:
 
         if best_work and best_score >= threshold:
             logger.info(
-                f"Best OpenAlex match: '{best_work.title[:50]}...' (score: {best_score:.2f})"
+                "Best OpenAlex match: '%s...' (score: %.2f)",
+                best_work.title[:50],
+                best_score,
             )
             return best_work
 
         logger.warning(
-            f"No good OpenAlex match for '{title[:50]}...' (best score: {best_score:.2f})"
+            "No good OpenAlex match for '%s...' (best score: %.2f)",
+            title[:50],
+            best_score,
         )
         return None

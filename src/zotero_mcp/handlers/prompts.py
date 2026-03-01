@@ -622,7 +622,7 @@ class PromptHandler:
                         ),
                         PromptArgument(
                             name="llm_provider",
-                            description="deepseek",
+                            description="auto | deepseek",
                             required=False,
                         ),
                         PromptArgument(

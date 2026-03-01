@@ -564,13 +564,13 @@ class ZoteroSemanticSearch:
             f"(batch: {scan_limit}, max: {treated_limit or 'all'})..."
         )
 
-        batch_size = scan_limit
+        batch_size = max(1, scan_limit)
         start = 0
         all_items = []
 
         while True:
             batch_params = {"start": start, "limit": batch_size}
-            if treated_limit and len(all_items) >= treated_limit:
+            if treated_limit is not None and len(all_items) >= treated_limit:
                 break
 
             try:
@@ -598,7 +598,7 @@ class ZoteroSemanticSearch:
             if len(items) < batch_size:
                 break
 
-        if treated_limit:
+        if treated_limit is not None:
             all_items = all_items[:treated_limit]
 
         logger.info(f"Retrieved {len(all_items)} items from API")
@@ -694,8 +694,15 @@ class ZoteroSemanticSearch:
                 except Exception:
                     pass
 
-            self.update_config["last_update"] = datetime.now().isoformat()
-            self._save_update_config()
+            if stats["errors"] == 0:
+                self.update_config["last_update"] = datetime.now().isoformat()
+                self._save_update_config()
+            else:
+                logger.warning(
+                    "Skipping last_update timestamp because %s indexing errors "
+                    "occurred",
+                    stats["errors"],
+                )
 
             end_time = datetime.now()
             stats["duration"] = str(end_time - start_time)

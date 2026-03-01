@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from typing import Any, Optional
+from typing import Any
 
 from zotero_mcp.handlers import PromptHandler, ToolHandler
 from zotero_mcp.settings import settings
@@ -12,17 +12,16 @@ from zotero_mcp.utils.config import load_config
 from zotero_mcp.utils.config.logging import initialize_logging
 
 try:  # Optional import for environments without MCP installed
-    from mcp.server import Server  # type: ignore[import-untyped]
-    from mcp.server.stdio import stdio_server  # type: ignore[import-untyped]
-    from mcp.types import (  # type: ignore[import-untyped]
+    from mcp.server import Server
+    from mcp.server.stdio import stdio_server
+    from mcp.types import (
         CallToolResult,
         GetPromptResult,
         ListPromptsResult,
         ListToolsResult,
-        TextContent,
     )
 
-    _MCP_IMPORT_ERROR: Optional[Exception] = None
+    _MCP_IMPORT_ERROR: Exception | None = None
 except Exception as exc:  # pragma: no cover - only for missing MCP
     Server = None  # type: ignore[assignment]
     stdio_server = None  # type: ignore[assignment]
@@ -30,7 +29,6 @@ except Exception as exc:  # pragma: no cover - only for missing MCP
     ListToolsResult = None  # type: ignore[assignment]
     ListPromptsResult = None  # type: ignore[assignment]
     GetPromptResult = None  # type: ignore[assignment]
-    TextContent = None  # type: ignore[assignment]
     _MCP_IMPORT_ERROR = exc
 
 
@@ -89,7 +87,8 @@ async def serve() -> None:
     async def _call_tool(request: Any) -> Any:
         name, arguments = _extract_name_and_args(request)
         content = await tool_handler.handle_tool(name, arguments)
-        return CallToolResult(content=content)
+        content_items: list[Any] = list(content)
+        return CallToolResult(content=content_items)
 
     @server.list_prompts()
     async def _list_prompts() -> Any:
@@ -108,8 +107,12 @@ async def serve() -> None:
 
     while True:
         try:
-            async with stdio_server(server):
-                await server.run()
+            async with stdio_server() as (read_stream, write_stream):
+                await server.run(
+                    read_stream,
+                    write_stream,
+                    server.create_initialization_options(),
+                )
         except ExceptionGroup:
             # Graceful shutdown when stdio is closed or client disconnects.
             if not keepalive:

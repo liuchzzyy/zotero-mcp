@@ -11,8 +11,14 @@ def test_compare_versions_handles_semver_and_v_prefix():
 
 def test_update_check_only_marks_no_update_when_current_is_newer():
     with (
-        patch("zotero_mcp.utils.system.updater.get_current_version", return_value="2.5.0"),
-        patch("zotero_mcp.utils.system.updater.get_latest_version", return_value="2.2.0"),
+        patch(
+            "zotero_mcp.utils.system.updater.get_current_version",
+            return_value="2.5.0",
+        ),
+        patch(
+            "zotero_mcp.utils.system.updater.get_latest_version",
+            return_value="2.2.0",
+        ),
     ):
         result = update_zotero_mcp(check_only=True)
 
@@ -23,8 +29,14 @@ def test_update_check_only_marks_no_update_when_current_is_newer():
 
 def test_update_check_only_marks_update_when_latest_is_newer():
     with (
-        patch("zotero_mcp.utils.system.updater.get_current_version", return_value="2.2.0"),
-        patch("zotero_mcp.utils.system.updater.get_latest_version", return_value="2.5.0"),
+        patch(
+            "zotero_mcp.utils.system.updater.get_current_version",
+            return_value="2.2.0",
+        ),
+        patch(
+            "zotero_mcp.utils.system.updater.get_latest_version",
+            return_value="2.5.0",
+        ),
     ):
         result = update_zotero_mcp(check_only=True)
 

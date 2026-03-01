@@ -19,6 +19,10 @@ from zotero_mcp.utils.config import load_config
 from zotero_mcp.utils.formatting.helpers import normalize_item_key
 
 
+async def _await_handler[T](handler: Callable[[], Awaitable[T]]) -> T:
+    return await handler()
+
+
 def _add_paging(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--limit", type=int, default=25)
     parser.add_argument("--offset", type=int, default=0)
@@ -189,7 +193,7 @@ def run_items(args: argparse.Namespace) -> int:
     if handler is None:
         raise ValueError(f"Unknown items subcommand: {args.subcommand}")
 
-    return _emit_result(args, asyncio.run(handler()))
+    return _emit_result(args, asyncio.run(_await_handler(handler)))
 
 
 def register_notes(subparsers: argparse._SubParsersAction) -> None:
@@ -255,7 +259,7 @@ def run_notes(args: argparse.Namespace) -> int:
     if handler is None:
         raise ValueError(f"Unknown notes subcommand: {args.subcommand}")
 
-    return _emit_result(args, asyncio.run(handler()))
+    return _emit_result(args, asyncio.run(_await_handler(handler)))
 
 
 def register_annotations(subparsers: argparse._SubParsersAction) -> None:
@@ -331,7 +335,7 @@ def run_annotations(args: argparse.Namespace) -> int:
     if handler is None:
         raise ValueError(f"Unknown annotations subcommand: {args.subcommand}")
 
-    return _emit_result(args, asyncio.run(handler()))
+    return _emit_result(args, asyncio.run(_await_handler(handler)))
 
 
 def register_pdfs(subparsers: argparse._SubParsersAction) -> None:
@@ -387,7 +391,7 @@ def run_pdfs(args: argparse.Namespace) -> int:
     if handler is None:
         raise ValueError(f"Unknown pdfs subcommand: {args.subcommand}")
 
-    return _emit_result(args, asyncio.run(handler()))
+    return _emit_result(args, asyncio.run(_await_handler(handler)))
 
 
 def register_collections(subparsers: argparse._SubParsersAction) -> None:
@@ -479,7 +483,7 @@ def run_collections(args: argparse.Namespace) -> int:
     if handler is None:
         raise ValueError(f"Unknown collections subcommand: {args.subcommand}")
 
-    return _emit_result(args, asyncio.run(handler()))
+    return _emit_result(args, asyncio.run(_await_handler(handler)))
 
 
 __all__ = [

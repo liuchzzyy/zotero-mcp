@@ -91,7 +91,11 @@ async def test_search_by_tag_filters_mixed_tag_payload(search_service, mock_api_
         limit=10,
     )
 
-    mock_api_client.get_items_by_tag.assert_awaited_once_with("AI分析", limit=100)
+    mock_api_client.get_items_by_tag.assert_awaited_once_with(
+        "AI分析",
+        limit=100,
+        start=0,
+    )
     assert [item.key for item in results] == ["K1"]
 
 
@@ -120,7 +124,11 @@ async def test_search_by_tag_normalizes_and_respects_limit(
         limit=2,
     )
 
-    mock_api_client.get_items_by_tag.assert_awaited_once_with("AI分析", limit=100)
+    mock_api_client.get_items_by_tag.assert_awaited_once_with(
+        "AI分析",
+        limit=100,
+        start=0,
+    )
     assert len(results) == 2
     assert [item.key for item in results] == ["K1", "K2"]
 

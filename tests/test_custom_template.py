@@ -60,7 +60,8 @@ async def test_workflow_service_propagates_template():
     mock_item_service.get_annotations = AsyncMock(return_value=[])
 
     # Set item_service property
-    # Since DataAccessService.item_service is a property, we need to mock it on the instance if possible,
+    # Since DataAccessService.item_service is a property, we need to mock
+    # it on the instance if possible,
     # or just set it as an attribute since MagicMock handles attributes.
     mock_data_service.item_service = mock_item_service
 

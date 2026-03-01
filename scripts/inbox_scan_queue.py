@@ -6,14 +6,15 @@
   .si-downloads/inbox/download_meta.json — URL → {key, type, fname} 映射
   .si-downloads/inbox/keyan_queue.txt   — 无法自动获取 MS 的条目（供科研通）
 """
-import re
 import json
+from pathlib import Path
+import re
 import time
 import urllib.parse
-import requests
-import pyzotero.zotero as zotero
+
 import httpx
-from pathlib import Path
+import pyzotero.zotero as zotero
+import requests
 
 # ── 配置 ──────────────────────────────────────────────────────────────────────
 LIBRARY_ID = "5452188"
@@ -283,7 +284,7 @@ def main():
     print("下一步:")
     print(f"  1. 打开 Surge，导入 {SURGE_FILE}")
     print(f"  2. 设置下载目录为: {OUT_DIR}")
-    print(f"  3. 下载完成后运行: uv run python scripts/inbox_upload_move.py")
+    print("  3. 下载完成后运行: uv run python scripts/inbox_upload_move.py")
     if keyan:
         print(f"  4. 查看 {KYAN_FILE}，在 ablesci.com 请求缺失的正文")
 

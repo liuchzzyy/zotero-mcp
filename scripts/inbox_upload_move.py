@@ -14,12 +14,13 @@
   5. 科研通 MS 文件也上传
   6. 重新扫描附件，MS ✓ 的条目移动到 00_AA
 """
-import re
 import json
-import win32com.client
-import pyzotero.zotero as zotero
-import httpx
 from pathlib import Path
+import re
+
+import httpx
+import pyzotero.zotero as zotero
+import win32com.client
 
 # ── 配置 ──────────────────────────────────────────────────────────────────────
 LIBRARY_ID = "5452188"
@@ -101,7 +102,7 @@ def move_to_aa(key: str):
         cols = fresh["data"].get("collections", [])
         new_cols = list(set(cols + [AA_KEY]) - {INBOX_KEY})
         zot.update_item({"key": key, "version": fresh["version"], "collections": new_cols})
-        print(f"  → ✅ 移动到 00_AA")
+        print("  → ✅ 移动到 00_AA")
         return True
     except Exception as e:
         print(f"  → ❌ 移动失败: {e}")
@@ -189,7 +190,7 @@ def main():
                 stats["uploaded"] += 1
 
         if not upload_ok:
-            print(f"  → 所有文件上传失败，跳过移动")
+            print("  → 所有文件上传失败，跳过移动")
             stats["skipped"] += 1
             continue
 
@@ -208,11 +209,11 @@ def main():
             if move_to_aa(key):
                 stats["moved"] += 1
         else:
-            print(f"  → 仍无 MS，不移动")
+            print("  → 仍无 MS，不移动")
 
     # ── 汇总 ─────────────────────────────────────────────────────────────────
     print(f"\n{'='*65}")
-    print(f"完成！")
+    print("完成！")
     print(f"  ✅ 文件上传     : {stats['uploaded']} 个")
     print(f"  ✅ 移动到 00_AA : {stats['moved']} 个条目")
     print(f"  ➖ 上传失败跳过 : {stats['skipped']} 个条目")

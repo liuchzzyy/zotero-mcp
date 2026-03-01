@@ -40,7 +40,12 @@ async def test_search_notes_filters_and_paginates():
 
     result = await service.search_notes(query="matched", limit=1, offset=1)
 
-    data_service.search_items.assert_awaited_once_with("matched", limit=50, offset=0)
+    data_service.search_items.assert_awaited_once_with(
+        "matched",
+        limit=50,
+        offset=0,
+        qmode="everything",
+    )
     assert result["total"] == 2
     assert result["count"] == 1
     assert result["results"][0]["note_key"] == "N3"

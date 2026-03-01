@@ -21,11 +21,13 @@ from zotero_mcp.services.common.pagination import iter_offset_batches
 from zotero_mcp.services.common.retry import async_retry_with_backoff
 from zotero_mcp.services.zotero.item_service import ItemService
 from zotero_mcp.services.zotero.metadata_service import MetadataService
+from zotero_mcp.services.zotero.result_mapper import api_item_to_search_result
 
 logger = logging.getLogger(__name__)
 
 AI_METADATA_TAG = "AI元数据"
 _SKIPPED_ITEM_TYPES = {"attachment", "note", "annotation"}
+_ZOTERO_API_MAX_PAGE_SIZE = 100
 
 # Mapping from enhanced metadata keys to Zotero item data keys
 _METADATA_FIELD_MAP = {
@@ -294,6 +296,7 @@ class MetadataUpdateService:
         scan_limit: int = 100,
         treated_limit: int | None = None,
         dry_run: bool = False,
+        include_unfiled: bool = True,
     ) -> dict[str, Any]:
         """
         Update metadata for multiple items with batch scanning.
@@ -358,7 +361,10 @@ class MetadataUpdateService:
             collection_keys = [coll["key"] for coll in collections]
 
         for coll_key in collection_keys:
-            if params.treated_limit and total_processed >= params.treated_limit:
+            if (
+                params.treated_limit is not None
+                and total_processed >= params.treated_limit
+            ):
                 logger.info(
                     f"Reached treated_limit ({params.treated_limit}), stopping scan"
                 )
@@ -384,6 +390,26 @@ class MetadataUpdateService:
                 f"{skipped} skipped, {ai_metadata_tagged} with '{AI_METADATA_TAG}' "
                 f"(items scanned: {total_scanned})"
             )
+
+        if (
+            include_unfiled
+            and not params.collection_key
+            and (params.treated_limit is None or total_processed < params.treated_limit)
+        ):
+            logger.info("Scanning full library to include unfiled/root items...")
+            scanned, proc, upd, skip, fail, ai_tagged = await self._process_library(
+                scan_limit=params.scan_limit,
+                treated_limit=params.treated_limit,
+                total_processed=total_processed,
+                dry_run=params.dry_run,
+                seen_item_keys=seen_item_keys,
+            )
+            total_scanned += scanned
+            total_processed += proc
+            updated += upd
+            skipped += skip
+            failed += fail
+            ai_metadata_tagged += ai_tagged
 
         logger.info(
             f"Metadata update complete: {updated} updated, "
@@ -451,9 +477,12 @@ class MetadataUpdateService:
 
         async for _offset, items in iter_offset_batches(
             self._make_collection_batch_fetcher(coll_key),
-            batch_size=scan_limit,
+            batch_size=self._effective_batch_size(scan_limit),
         ):
-            if treated_limit and total_processed + processed >= treated_limit:
+            if (
+                treated_limit is not None
+                and total_processed + processed >= treated_limit
+            ):
                 break
 
             parent_items = [
@@ -462,7 +491,10 @@ class MetadataUpdateService:
             scanned += len(parent_items)
 
             for item in parent_items:
-                if treated_limit and total_processed + processed >= treated_limit:
+                if (
+                    treated_limit is not None
+                    and total_processed + processed >= treated_limit
+                ):
                     break
 
                 if item.key in seen_item_keys:
@@ -496,6 +528,66 @@ class MetadataUpdateService:
             ai_metadata_tagged,
         )
 
+    async def _process_library(
+        self,
+        scan_limit: int,
+        treated_limit: int | None,
+        total_processed: int,
+        dry_run: bool,
+        seen_item_keys: set[str],
+    ) -> tuple[int, int, int, int, int, int]:
+        """Process full-library items to include unfiled/root entries."""
+        scanned = 0
+        processed = 0
+        updated = 0
+        skipped = 0
+        failed = 0
+        ai_metadata_tagged = 0
+
+        async for _offset, items in iter_offset_batches(
+            self._make_library_batch_fetcher(),
+            batch_size=self._effective_batch_size(scan_limit),
+        ):
+            if (
+                treated_limit is not None
+                and total_processed + processed >= treated_limit
+            ):
+                break
+
+            parent_items = [
+                item for item in items if item.item_type not in _SKIPPED_ITEM_TYPES
+            ]
+            scanned += len(parent_items)
+
+            for item in parent_items:
+                if (
+                    treated_limit is not None
+                    and total_processed + processed >= treated_limit
+                ):
+                    break
+
+                if item.key in seen_item_keys:
+                    continue
+                seen_item_keys.add(item.key)
+
+                tag_names = _extract_tag_names(item.tags or [])
+                if AI_METADATA_TAG in tag_names:
+                    skipped += 1
+                    ai_metadata_tagged += 1
+                    continue
+
+                processed += 1
+                result = await self.update_item_metadata(item.key, dry_run=dry_run)
+                if result["success"]:
+                    if result["updated"]:
+                        updated += 1
+                    else:
+                        skipped += 1
+                else:
+                    failed += 1
+
+        return scanned, processed, updated, skipped, failed, ai_metadata_tagged
+
     def _make_collection_batch_fetcher(
         self, coll_key: str
     ):
@@ -517,6 +609,37 @@ class MetadataUpdateService:
             )
 
         return _fetch_page
+
+    def _make_library_batch_fetcher(self):
+        """Build a paged library fetcher using API payloads for stable paging."""
+
+        async def _fetch_page(offset: int, limit: int):
+            def _fetch_items(page_limit: int = limit, page_offset: int = offset):
+                return self.item_service.api_client.get_all_items(
+                    limit=page_limit,
+                    start=page_offset,
+                )
+
+            raw_items = await async_retry_with_backoff(
+                _fetch_items,
+                description=f"Scan library (offset {offset})",
+            )
+            if isinstance(raw_items, int) or not isinstance(raw_items, list):
+                return []
+            return [api_item_to_search_result(item) for item in raw_items]
+
+        return _fetch_page
+
+    def _effective_batch_size(self, scan_limit: int) -> int:
+        """Clamp scan batch size to Zotero API max page size."""
+        if scan_limit > _ZOTERO_API_MAX_PAGE_SIZE:
+            logger.info(
+                "Requested scan-limit %s exceeds API page max %s; using %s",
+                scan_limit,
+                _ZOTERO_API_MAX_PAGE_SIZE,
+                _ZOTERO_API_MAX_PAGE_SIZE,
+            )
+        return max(1, min(scan_limit, _ZOTERO_API_MAX_PAGE_SIZE))
 
     async def _fetch_enhanced_metadata(
         self, doi: str, title: str, url: str

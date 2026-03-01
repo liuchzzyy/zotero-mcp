@@ -10,11 +10,23 @@ from unittest.mock import patch
 from zotero_mcp.clients.llm.base import LLMClient
 from zotero_mcp.clients.llm.cli import CLILLMClient
 
+PNG_1PX = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGA"
+    "WjR9awAAAABJRU5ErkJggg=="
+)
+PNG_2PX = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAADkInGQAAAADUlEQVR42mNk+M9QDwADhgGA"
+    "WjR9awAAAABJRU5ErkJggg=="
+)
+
 
 class TestDeepSeekImageSupport:
     """Tests for DeepSeek client image handling (text-only)."""
 
-    @patch.dict("os.environ", {"DEEPSEEK_API_KEY": "test-key"})
+    @patch.dict(
+        "os.environ",
+        {"DEEPSEEK_API_KEY": "test-key", "DEEPSEEK_MAX_TOKENS": "8192"},
+    )
     def test_init_deepseek_client(self):
         """Test DeepSeek client initialization."""
         client = LLMClient()
@@ -81,12 +93,12 @@ class TestDeepSeekImageSupport:
             {
                 "page": 1,
                 "format": "base64",
-                "content": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                "content": PNG_1PX,
             },
             {
                 "page": 3,
                 "format": "base64",
-                "content": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                "content": PNG_1PX,
             },
         ]
 
@@ -146,7 +158,7 @@ class TestDeepSeekImageSupport:
             {
                 "page": 1,
                 "format": "base64",
-                "content": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                "content": PNG_1PX,
             }
         ]
 
@@ -219,12 +231,12 @@ class TestClaudeCLIImageSupport:
             {
                 "page": 1,
                 "format": "base64",
-                "content": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                "content": PNG_1PX,
             },
             {
                 "page": 3,
                 "format": "base64",
-                "content": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAADkInGQAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                "content": PNG_2PX,
             },
         ]
 
@@ -296,7 +308,7 @@ class TestClaudeCLIImageSupport:
             {
                 "page": 1,
                 "format": "base64",
-                "content": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                "content": PNG_1PX,
             }
         ]
 
@@ -335,7 +347,7 @@ class TestClaudeCLIImageSupport:
         images = [
             {
                 "format": "base64",
-                "content": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                "content": PNG_1PX,
             }
         ]
 

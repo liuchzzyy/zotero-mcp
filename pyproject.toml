@@ -38,7 +38,6 @@ dependencies = [
     "pymupdf>=1.24.0",
     "pymupdf4llm>=0.0.7",
     "Pillow>=10.0.0",
-    "playwright>=1.58.0",
 ]
 
 [dependency-groups]
@@ -51,11 +50,8 @@ dev = [
     "basedpyright>=1.37.2",
     "pip-audit>=2.0.0",
     "radon>=6.0.1",
+    "playwright>=1.58.0",
 ]
-
-[project.optional-dependencies]
-ocr = ["pytesseract>=0.3.10"]
-all = ["zotero-mcp[ocr]"]
 
 [project.urls]
 Homepage = "https://github.com/liuchzzyy/zotero-mcp"
@@ -70,9 +66,13 @@ zotero-mcp = "zotero_mcp.cli_app.main:main"
 [tool.ruff]
 line-length = 88
 target-version = "py312"
+extend-exclude = ["scripts"]
 
 [tool.ty.environment]
 python-version = "3.12"
+
+[tool.ty.src]
+exclude = ["scripts"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "C4", "UP"]

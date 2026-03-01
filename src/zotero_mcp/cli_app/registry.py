@@ -7,7 +7,6 @@ from collections.abc import Callable
 
 from zotero_mcp.cli_app.commands import resources, semantic, system, tags, workflow
 
-
 CommandRunner = Callable[[argparse.Namespace], int]
 
 

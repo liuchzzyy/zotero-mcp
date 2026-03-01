@@ -8,7 +8,7 @@ with checkpoint support for resuming interrupted workflows.
 from collections.abc import Callable
 import re
 import time
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from zotero_mcp.clients.llm import get_llm_client
 from zotero_mcp.models.workflow import (
@@ -17,7 +17,7 @@ from zotero_mcp.models.workflow import (
     ItemAnalysisResult,
     PrepareAnalysisResponse,
 )
-from zotero_mcp.services.checkpoint import get_checkpoint_manager
+from zotero_mcp.services.checkpoint import WorkflowState, get_checkpoint_manager
 from zotero_mcp.services.data_access import get_data_service
 from zotero_mcp.services.note_parser import get_structured_note_parser
 from zotero_mcp.services.note_renderer import get_structured_note_renderer
@@ -341,10 +341,10 @@ class WorkflowService:
         )
 
         # Load or create workflow state
-        workflow_state = None
+        workflow_state: WorkflowState | None = None
         if resume_workflow_id:
-            workflow_state = self.checkpoint_manager.load_state(resume_workflow_id)
-            if not workflow_state:
+            loaded_state = self.checkpoint_manager.load_state(resume_workflow_id)
+            if not loaded_state:
                 return BatchAnalyzeResponse(
                     success=False,
                     error=f"Workflow {resume_workflow_id} not found",
@@ -353,6 +353,7 @@ class WorkflowService:
                     processed=0,
                     failed=0,
                 )
+            workflow_state = cast(WorkflowState, loaded_state)
 
         # Get items
         items = await self._get_items(
@@ -372,7 +373,9 @@ class WorkflowService:
         # Create workflow state if new
         if workflow_state is None:
             source_id = collection_key or collection_name or "recent"
-            workflow_state = self.checkpoint_manager.create_workflow(
+            workflow_state = cast(
+                WorkflowState,
+                self.checkpoint_manager.create_workflow(
                 source_type=source,
                 source_identifier=source_id,
                 total_items=len(items),
@@ -382,6 +385,7 @@ class WorkflowService:
                     "include_annotations": include_annotations,
                     "include_multimodal": include_multimodal,
                 },
+                ),
             )
 
         # Get remaining items to process
@@ -515,10 +519,10 @@ class WorkflowService:
                 results.append(result)
 
                 # Update workflow state
-                if result.success:
-                    workflow_state.mark_processed(item_key)
-                elif result.skipped:
+                if result.skipped:
                     workflow_state.mark_skipped(item_key)
+                elif result.success:
+                    workflow_state.mark_processed(item_key)
                 else:
                     workflow_state.mark_failed(
                         item_key, result.error or "Unknown error"
@@ -527,14 +531,21 @@ class WorkflowService:
                 # Save checkpoint after each item
                 self.checkpoint_manager.save_state(workflow_state)
 
-        # Final state update
-        workflow_state.status = "completed"
-        self.checkpoint_manager.save_state(workflow_state)
-
         # Build response
         total_processed = len(workflow_state.processed_keys)
         total_skipped = len(workflow_state.skipped_keys)
         total_failed = len(workflow_state.failed_keys)
+        if (
+            total_failed >= workflow_state.total_items
+            and workflow_state.total_items > 0
+        ):
+            status = "failed"
+        elif total_failed > 0:
+            status = "partial"
+        else:
+            status = "completed"
+        workflow_state.status = "completed" if status == "completed" else "failed"
+        self.checkpoint_manager.save_state(workflow_state)
 
         # Collect errors
         errors = [
@@ -560,7 +571,7 @@ class WorkflowService:
             skipped=total_skipped,
             failed=total_failed,
             results=results,
-            status="completed",
+            status=status,
             can_resume=False,
         )
 
@@ -711,6 +722,14 @@ class WorkflowService:
                     html_note=html_note,
                     llm_client=llm_client,
                 )
+                if not note_key:
+                    return ItemAnalysisResult(
+                        item_key=item.key,
+                        title=item.title,
+                        success=False,
+                        error="创建分析笔记失败：未返回 note key",
+                        processing_time=time.time() - start_time,
+                    )
                 # Tags are already added to parent item in _save_note method
                 if move_to_collection and note_key:
                     await self._move_to_collection(item, move_to_collection)
@@ -1055,7 +1074,10 @@ class WorkflowService:
                     logger.warning(f"Collection not found: {collection_name}")
                     return []
                 # Use best match
-                collection_key = matches[0].get("data", {}).get("key")
+                first_match = matches[0]
+                collection_key = first_match.get("key") or first_match.get(
+                    "data", {}
+                ).get("key")
 
             if not collection_key:
                 logger.warning("No collection key provided")

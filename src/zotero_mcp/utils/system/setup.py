@@ -407,9 +407,9 @@ def main(cli_args=None):
     try:
         cfg_path = write_standalone_config(
             local=use_local,
-            api_key=api_key,
-            library_id=library_id,
-            library_type=library_type,
+            api_key=api_key or "",
+            library_id=library_id or "",
+            library_type=library_type or "",
             semantic_config=semantic_config,
         )
         print("\nSetup complete!")

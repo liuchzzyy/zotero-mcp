@@ -1,6 +1,6 @@
 """Tests for structured note parser recovery behavior."""
 
-from zotero_mcp.models.zotero import ParagraphBlock
+from zotero_mcp.models.zotero import HeadingBlock, ParagraphBlock
 from zotero_mcp.services.note_parser import StructuredNoteParser
 
 
@@ -31,6 +31,7 @@ def test_json_heading_strips_markdown_prefix_and_uses_inferred_level():
     blocks = parser.parse(content)
 
     assert len(blocks) == 1
+    assert isinstance(blocks[0], HeadingBlock)
     assert blocks[0].type == "heading"
     assert blocks[0].level == 3
     assert blocks[0].content == "标题A"

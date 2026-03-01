@@ -35,7 +35,9 @@ def test_openalex_from_api_response_handles_mixed_invalid_types():
         "doi": 123,
         "title": "Typed Payload",
         "authorships": [{"author": {"display_name": "A. Author"}}, "bad"],
-        "primary_location": {"source": {"display_name": "J", "abbreviated_title": "J."}},
+        "primary_location": {
+            "source": {"display_name": "J", "abbreviated_title": "J."}
+        },
         "abstract_inverted_index": {"hello": [0], "bad": None},
         "concepts": [{"display_name": "AI", "score": 0.5}, None],
         "grants": [{"funder": {"display_name": "NSF"}, "award_id": "123"}],

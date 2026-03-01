@@ -1,6 +1,6 @@
 """Tests for MetadataUpdateService."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -53,20 +53,21 @@ async def test_update_all_items_skips_unsupported_item_types_before_processing()
         [],
     ]
 
-    service.update_item_metadata = AsyncMock(
+    update_item_metadata_mock = AsyncMock(
         return_value={"success": True, "updated": False}
     )
-
-    result = await service.update_all_items(
-        scan_limit=10,
-        treated_limit=10,
-        dry_run=True,
-    )
+    with patch.object(service, "update_item_metadata", update_item_metadata_mock):
+        result = await service.update_all_items(
+            scan_limit=10,
+            treated_limit=10,
+            dry_run=True,
+            include_unfiled=False,
+        )
 
     assert result["processed_candidates"] == 1
     assert result["skipped"] == 1
     assert result["ai_metadata_tagged"] == 0
-    service.update_item_metadata.assert_awaited_once_with("A1", dry_run=True)
+    update_item_metadata_mock.assert_awaited_once_with("A1", dry_run=True)
 
 
 @pytest.mark.asyncio
@@ -96,20 +97,21 @@ async def test_update_all_items_counts_ai_metadata_tagged_items():
         ],
         [],
     ]
-    service.update_item_metadata = AsyncMock(
+    update_item_metadata_mock = AsyncMock(
         return_value={"success": True, "updated": False}
     )
-
-    result = await service.update_all_items(
-        scan_limit=10,
-        treated_limit=10,
-        dry_run=True,
-    )
+    with patch.object(service, "update_item_metadata", update_item_metadata_mock):
+        result = await service.update_all_items(
+            scan_limit=10,
+            treated_limit=10,
+            dry_run=True,
+            include_unfiled=False,
+        )
 
     assert result["processed_candidates"] == 1
     assert result["ai_metadata_tagged"] == 1
     assert result["skipped"] == 2
-    service.update_item_metadata.assert_awaited_once_with("A1", dry_run=True)
+    update_item_metadata_mock.assert_awaited_once_with("A1", dry_run=True)
 
 
 @pytest.mark.asyncio
@@ -122,6 +124,7 @@ async def test_update_all_items_rejects_invalid_limits():
         scan_limit=0,
         treated_limit=10,
         dry_run=True,
+        include_unfiled=False,
     )
 
     assert result["error"] == "invalid metadata update parameters"
@@ -199,18 +202,19 @@ async def test_update_all_items_deduplicates_items_across_collections():
         [type("Item", (), {"key": "A1", "item_type": "journalArticle", "tags": []})()],
         [],
     ]
-    service.update_item_metadata = AsyncMock(
+    update_item_metadata_mock = AsyncMock(
         return_value={"success": True, "updated": True}
     )
-
-    result = await service.update_all_items(
-        scan_limit=10,
-        treated_limit=10,
-        dry_run=True,
-    )
+    with patch.object(service, "update_item_metadata", update_item_metadata_mock):
+        result = await service.update_all_items(
+            scan_limit=10,
+            treated_limit=10,
+            dry_run=True,
+            include_unfiled=False,
+        )
 
     assert result["processed_candidates"] == 1
-    service.update_item_metadata.assert_awaited_once_with("A1", dry_run=True)
+    update_item_metadata_mock.assert_awaited_once_with("A1", dry_run=True)
 
 
 def test_build_updated_item_data_skips_periodical_fields_for_book():
@@ -377,3 +381,4 @@ def test_build_updated_item_data_unmatched_fields_go_to_extra():
     assert "Full-text PDF: https://example.com/full.pdf" in updated["extra"]
     assert "Journal: Journal Name" in updated["extra"]
     assert "Unknown Field: mystery" in updated["extra"]
+

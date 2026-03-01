@@ -11,10 +11,10 @@ class ScannerRunParams(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     scan_limit: int = Field(default=100, ge=1)
-    treated_limit: int = Field(default=20, ge=1)
+    treated_limit: int | None = Field(default=20, ge=1)
     target_collection: str = Field(..., min_length=1)
     dry_run: bool = Field(default=False)
-    llm_provider: str = Field(default="deepseek")
+    llm_provider: Literal["auto", "deepseek"] = Field(default="deepseek")
     source_collection: str | None = Field(default="00_INBOXS")
     include_multimodal: bool = Field(default=True)
     template: Literal["research", "review", "auto"] = Field(
@@ -40,5 +40,5 @@ class DuplicateScanParams(BaseModel):
 
     collection_key: str | None = Field(default=None)
     scan_limit: int = Field(default=500, ge=1)
-    treated_limit: int = Field(default=1000, ge=1)
+    treated_limit: int | None = Field(default=1000, ge=1)
     dry_run: bool = Field(default=False)

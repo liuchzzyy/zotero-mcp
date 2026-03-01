@@ -108,7 +108,7 @@ def test_extract_with_missing_file():
         extractor.extract_elements(Path("nonexistent.pdf"))
 
 
-def test_merge_text_blocks():
+def test_merge_text_blocks(tmp_path):
     """Test text block merging logic."""
     import fitz
 
@@ -117,7 +117,7 @@ def test_merge_text_blocks():
     page.insert_text((50, 50), "First line")
     page.insert_text((50, 70), "Second line")
 
-    test_pdf = Path("/tmp/test_merge.pdf")
+    test_pdf = tmp_path / "test_merge.pdf"
     doc.save(test_pdf)
     doc.close()
 

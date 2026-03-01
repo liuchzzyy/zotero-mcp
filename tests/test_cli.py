@@ -1,5 +1,6 @@
 """Tests for refactored CLI command tree."""
 
+import argparse
 import json
 import subprocess
 import sys
@@ -268,6 +269,49 @@ def test_item_analysis_rejects_unimplemented_llm_provider_openai():
         )
 
 
+def test_item_analysis_accepts_auto_llm_provider():
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "workflow",
+            "item-analysis",
+            "--target-collection",
+            "01_SHORTTERMS",
+            "--llm-provider",
+            "auto",
+        ]
+    )
+    assert args.llm_provider == "auto"
+
+
+def test_workflow_treated_limit_rejects_zero():
+    parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "workflow",
+                "deduplicate",
+                "--treated-limit",
+                "0",
+            ]
+        )
+
+
+def test_all_flag_is_exposed_for_treated_limit_commands():
+    parser = build_parser()
+    workflow_item_args = parser.parse_args(
+        ["workflow", "item-analysis", "--target-collection", "DONE", "--all"]
+    )
+    workflow_meta_args = parser.parse_args(["workflow", "metadata-update", "--all"])
+    workflow_dedup_args = parser.parse_args(["workflow", "deduplicate", "--all"])
+    semantic_args = parser.parse_args(["semantic", "db-update", "--all"])
+
+    assert workflow_item_args.all is True
+    assert workflow_meta_args.all is True
+    assert workflow_dedup_args.all is True
+    assert semantic_args.all is True
+
+
 def test_semantic_status_supports_json_output():
     result = subprocess.run(
         [
@@ -302,6 +346,41 @@ def test_semantic_db_update_supports_no_local():
     parser = build_parser()
     args = parser.parse_args(["semantic", "db-update", "--no-local"])
     assert args.local is False
+
+
+def test_semantic_db_update_returns_nonzero_on_error(monkeypatch):
+    from zotero_mcp.cli_app.commands import semantic
+
+    class _FakeSearch:
+        def update_database(self, **_kwargs):
+            return {"error": "boom"}
+
+    monkeypatch.setattr(semantic, "load_config", lambda: None)
+    monkeypatch.setattr(semantic, "emit", lambda *_args, **_kwargs: None)
+
+    # Patch module-level import path used inside run()
+    import zotero_mcp.services.zotero.semantic_search as semantic_search_module
+
+    monkeypatch.setattr(
+        semantic_search_module,
+        "create_semantic_search",
+        lambda *_args, **_kwargs: _FakeSearch(),
+    )
+
+    args = argparse.Namespace(
+        subcommand="db-update",
+        local=True,
+        config_path=None,
+        db_path=None,
+        force_rebuild=False,
+        scan_limit=10,
+        treated_limit=5,
+        all=False,
+        no_fulltext=False,
+        output="json",
+    )
+    code = semantic.run(args)
+    assert code == 1
 
 
 def test_obfuscate_config_masks_api_keys_and_tokens():

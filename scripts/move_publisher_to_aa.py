@@ -4,6 +4,7 @@
 """
 import re
 import sys
+
 from pyzotero import zotero
 
 # ── 配置 ──────────────────────────────────────────────────────────────────────
@@ -197,7 +198,7 @@ def main():
 
     # 汇总
     print(f"\n{'═'*65}")
-    print(f"完成！")
+    print("完成！")
     print(f"  ✅ 已移动到 00_AA : {len(moved)} 条")
     print(f"  ⏭️  无PDF跳过     : {len(skipped_no_pdf)} 条")
     print(f"  ⏭️  多PDF跳过     : {len(skipped_multi_pdf)} 条")

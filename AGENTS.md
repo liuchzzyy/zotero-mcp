@@ -1,6 +1,10 @@
 # Repository Guidelines
 
-## 当前逻辑框架（2026-02-23）
+## 协作约定（重要）
+- 每次回复用户时，固定称呼：`干饭小伙子`。
+- 每次完成修订后，需将修改文件保存到 git（`git add` 并创建 commit）。
+
+## 当前逻辑框架（2026-03-01）
 
 ### 1) 入口与调用链
 
@@ -32,14 +36,19 @@
 - `metadata-update` -> `MetadataUpdateService.update_item_metadata / update_all_items`
 - `deduplicate` -> `DuplicateDetectionService.find_and_remove_duplicates`
 - 实现文件：`src/zotero_mcp/cli_app/commands/workflow.py`
+- 参数约定（重要）：
+  - `--treated-limit` 必须 `>=1`
+  - 需要全库处理时使用 `--all`（而不是 `--treated-limit=0`）
+  - `item-analysis --llm-provider` 取值：`auto | deepseek`
 
 #### `semantic`
 - `db-update` / `db-status` / `db-inspect`
 - 实现文件：`src/zotero_mcp/cli_app/commands/semantic.py`
 - 核心服务：`src/zotero_mcp/services/zotero/semantic_search.py`
+- `db-update` 支持 `--all`，并在更新失败时返回非 0 退出码
 
 #### `tags`
-- `list` / `add` / `search` / `delete` / `rename`
+- `list` / `add` / `search` / `delete` / `purge` / `rename`
 - 实现文件：`src/zotero_mcp/cli_app/commands/tags.py`
 
 #### 资源命令组（`src/zotero_mcp/cli_app/commands/resources.py`）
@@ -68,8 +77,8 @@
 
 #### 批处理工作流实现
 - `scanner.py`：两阶段扫描（优先源集合，再全库补足），筛选“有 PDF 且无 `AI分析` 标签”。
-- `metadata_update_service.py`：先 DOI，再标题等补充路径，更新后打 `AI元数据` 标签。
-- `duplicate_service.py`：按 `DOI > title > URL` 分组，保留信息最完整条目，删除其余重复条目。
+- `metadata_update_service.py`：先 DOI，再标题等补充路径，更新后打 `AI元数据` 标签；支持 `include_unfiled`。
+- `duplicate_service.py`：按 `DOI > title > URL` 分组，保留信息最完整条目，删除其余重复条目；同标题但 DOI 冲突不合并。
 
 #### CLI 输出与退出码
 - 所有新命令支持 `--output text|json`。
@@ -85,12 +94,17 @@
 - `uv run zotero-mcp semantic db-status --output json`
 - `uv run pytest -q`
 - `uv run pytest tests/test_cli.py -q`
-- `uv run ruff check src/ tests/`
+- `uv run ruff check .`
+- `uv run ty check .`
+- `uv run ty check tests`
 
 ### 5) 代码风格与命名
 - Python 3.12+，4 空格缩进。
 - 新增/修改代码要求类型标注。
 - 遵循 `pyproject.toml` 中 Ruff 配置（line length 88）。
+- 静态检查范围约定：
+  - `ruff` 默认排除 `scripts/`
+  - `ty` 默认排除 `scripts/`
 - 命名约定：
   - modules/functions：`snake_case`
   - classes：`PascalCase`

@@ -188,6 +188,19 @@ async def test_find_duplicate_groups_skips_items_with_parent_item():
 
 
 @pytest.mark.asyncio
+async def test_find_duplicate_groups_does_not_merge_same_title_with_different_doi():
+    service = DuplicateDetectionService(item_service=AsyncMock())
+    items = [
+        _api_item("T1", doi="10.1000/one", title="Same Title"),
+        _api_item("T2", doi="10.1000/two", title="Same Title"),
+    ]
+
+    result = await service._find_duplicate_groups(items)
+
+    assert result["groups"] == []
+
+
+@pytest.mark.asyncio
 async def test_find_and_remove_duplicates_counts_delete_failures():
     item_service = AsyncMock()
     item_service.api_client.get_all_items = AsyncMock(

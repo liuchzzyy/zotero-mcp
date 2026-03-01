@@ -18,6 +18,12 @@ from zotero_mcp.utils.formatting.tags import (
 )
 
 
+async def _await_handler(
+    handler: Callable[[], Awaitable[dict[str, Any]]],
+) -> dict[str, Any]:
+    return await handler()
+
+
 def register(subparsers: argparse._SubParsersAction) -> None:
     tags_cmd = subparsers.add_parser("tags", help="Tag operations")
     tags_sub = tags_cmd.add_subparsers(dest="subcommand", required=True)
@@ -303,7 +309,7 @@ def run(args: argparse.Namespace) -> int:
     if handler is None:
         raise ValueError(f"Unknown tags subcommand: {args.subcommand}")
 
-    payload = asyncio.run(handler())
+    payload = asyncio.run(_await_handler(handler))
     emit(args, payload)
     return _exit_code(payload)
 

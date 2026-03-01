@@ -147,7 +147,8 @@ class CLILLMClient:
 
         # Build prompt content for the file
         if template:
-            file_content = f"""你是一位专业的科研文献分析助手。请仔细阅读以下论文内容，并按照提供的模板结构进行分析。
+            file_content = f"""你是一位专业的科研文献分析助手。
+请仔细阅读以下论文内容，并按照提供的模板结构进行分析。
 
 ## 论文基本信息
 
@@ -228,6 +229,10 @@ class CLILLMClient:
                 figure_analysis_section=figure_analysis_section,
                 table_analysis_section=table_analysis_section,
             )
+            if images_section and "## Images" not in file_content:
+                file_content = (
+                    f"{file_content.rstrip()}\n\n{images_section.strip()}\n"
+                )
 
         # Write to temporary file and run CLI
         return await self._run_cli_with_file(file_content)
@@ -251,7 +256,8 @@ class CLILLMClient:
         if not shutil.which(self.cli_command):
             raise FileNotFoundError(
                 f"CLI command '{self.cli_command}' not found in PATH. "
-                f"Please install Claude Code CLI: npm install -g @anthropic-ai/claude-code"
+                "Please install Claude Code CLI: "
+                "npm install -g @anthropic-ai/claude-code"
             )
 
         # Write content to temporary file

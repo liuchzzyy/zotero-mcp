@@ -1,6 +1,7 @@
 """Tests for ZoteroAPIClient tag operations."""
 
-from unittest.mock import AsyncMock, MagicMock
+from typing import Any, cast
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -13,7 +14,7 @@ async def test_add_tags_normalizes_and_avoids_duplicate_append():
     client._client = MagicMock()
     client._client.update_item.return_value = {"ok": True}
 
-    client.get_item = AsyncMock(
+    get_item_mock = AsyncMock(
         return_value={
             "key": "ITEM1",
             "data": {
@@ -21,12 +22,13 @@ async def test_add_tags_normalizes_and_avoids_duplicate_append():
             },
         }
     )
+    with patch.object(client, "get_item", get_item_mock):
+        await client.add_tags("ITEM1", [" 保留 ", "新增", "", "新增"])
 
-    await client.add_tags("ITEM1", [" 保留 ", "新增", "", "新增"])
-
-    client.get_item.assert_awaited_once_with("ITEM1")
-    client.client.update_item.assert_called_once()
-    updated = client.client.update_item.call_args.args[0]
+    get_item_mock.assert_awaited_once_with("ITEM1")
+    update_item_mock = cast(Any, client.client.update_item)
+    update_item_mock.assert_called_once()
+    updated = update_item_mock.call_args.args[0]
     assert updated["data"]["tags"] == [
         {"tag": "AI分析"},
         {"tag": "保留"},

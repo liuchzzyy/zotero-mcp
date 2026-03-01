@@ -33,7 +33,8 @@ REQUEST_TIMEOUT = 360  # Timeout in seconds (6 minutes for PDF analysis)
 
 # Context window management
 DEEPSEEK_MAX_CONTEXT_TOKENS = 131072  # DeepSeek context window limit
-PROMPT_OVERHEAD_TOKENS = 3000  # Reserved for system message, template, metadata, annotations
+# Reserved for system message, template, metadata, annotations.
+PROMPT_OVERHEAD_TOKENS = 3000
 CHARS_PER_TOKEN = 3  # Conservative estimate for mixed Chinese/English text
 
 
@@ -97,7 +98,11 @@ class LLMClient:
         # Get model
         # Priority: explicit parameter > env var > default
         # Use deepseek-v3 if available, otherwise fallback to deepseek-chat
-        self.model = model or os.getenv(DEEPSEEK_CONFIG["env_model"]) or "deepseek-chat"
+        self.model = (
+            model
+            or os.getenv(DEEPSEEK_CONFIG["env_model"])
+            or "deepseek-chat"
+        )
 
         # Resolve max output tokens with model-aware cap.
         env_max_tokens = os.getenv(DEEPSEEK_CONFIG["env_max_tokens"])
@@ -114,7 +119,8 @@ class LLMClient:
 
         logger.info(
             f"Initialized DeepSeek LLM client: "
-            f"model={self.model}, base_url={self.base_url}, max_tokens={self.max_tokens}"
+            f"model={self.model}, base_url={self.base_url}, "
+            f"max_tokens={self.max_tokens}"
         )
 
         # Store provider for downstream use
@@ -240,7 +246,8 @@ class LLMClient:
         # Build prompt
         if template:
             # Use custom template strategy
-            prompt = f"""你是一位专业的科研文献分析助手。请仔细阅读以下论文内容，并按照提供的模板结构进行分析。
+            prompt = f"""你是一位专业的科研文献分析助手。
+请仔细阅读以下论文内容，并按照提供的模板结构进行分析。
 
 ## 论文基本信息
 
@@ -321,6 +328,8 @@ class LLMClient:
                 figure_analysis_section=figure_analysis_section,
                 table_analysis_section=table_analysis_section,
             )
+            if images_section and "## Images" not in prompt:
+                prompt = f"{prompt.rstrip()}\n\n{images_section.strip()}\n"
 
         # Call DeepSeek API with retry
         return await self._call_with_retry(self._call_deepseek_api, prompt)
@@ -451,7 +460,10 @@ class LLMClient:
                 messages=[
                     {
                         "role": "system",
-                        "content": "你是一位专业的科研文献分析助手，擅长深入分析学术论文并提取关键信息。",
+                        "content": (
+                            "你是一位专业的科研文献分析助手，"
+                            "擅长深入分析学术论文并提取关键信息。"
+                        ),
                     },
                     {"role": "user", "content": prompt},
                 ],

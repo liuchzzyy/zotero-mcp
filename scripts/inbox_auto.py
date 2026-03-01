@@ -8,15 +8,16 @@
 运行:
     uv run python scripts/inbox_auto.py
 """
-import re
 import json
-import time
-import win32com.client
-import pyzotero.zotero as zotero
-import httpx
-import requests
 from pathlib import Path
+import re
+import time
+
+import httpx
 from playwright.sync_api import sync_playwright
+import pyzotero.zotero as zotero
+import requests
+import win32com.client
 
 # ── 配置 ──────────────────────────────────────────────────────────────────────
 LIBRARY_ID = "5452188"
@@ -113,7 +114,7 @@ def move_to_aa(key: str) -> bool:
         cols  = fresh["data"].get("collections", [])
         new_cols = list(set(cols + [AA_KEY]) - {INBOX_KEY})
         zot.update_item({"key": key, "version": fresh["version"], "collections": new_cols})
-        print(f"  → ✅ 移动到 00_AA")
+        print("  → ✅ 移动到 00_AA")
         return True
     except Exception as e:
         print(f"  → ❌ 移动失败: {e}")
@@ -209,7 +210,7 @@ def phase1_direct_download(meta: dict) -> dict[str, list[Path]]:
 
         time.sleep(0.1)
 
-    print(f"\n  结果:", flush=True)
+    print("\n  结果:", flush=True)
     for k, v in sorted(stats.items()):
         print(f"    {k:15s}: {v}")
     print(f"  成功条目数: {len(uploads)}")
@@ -231,7 +232,7 @@ def phase2_upload_move(all_uploads: dict[str, list[Path]]) -> set[str]:
         print(f"\n[{key}]", flush=True)
 
         if not item_in_inbox(key):
-            print(f"  → 条目不在 INBOXS_AA，跳过")
+            print("  → 条目不在 INBOXS_AA，跳过")
             continue
 
         upload_ok = False
@@ -247,7 +248,7 @@ def phase2_upload_move(all_uploads: dict[str, list[Path]]) -> set[str]:
                 stats["uploaded"] += 1
 
         if not upload_ok:
-            print(f"  → 所有文件上传失败，跳过")
+            print("  → 所有文件上传失败，跳过")
             stats["skipped"] += 1
             continue
 
@@ -256,7 +257,7 @@ def phase2_upload_move(all_uploads: dict[str, list[Path]]) -> set[str]:
                 stats["moved"] += 1
                 moved_keys.add(key)
         else:
-            print(f"  → 仍无 MS（已上传 SI），等待科研通")
+            print("  → 仍无 MS（已上传 SI），等待科研通")
 
     print(f"\n  ✅ 上传: {stats['uploaded']}个  已移动: {stats['moved']}个  跳过: {stats['skipped']}个")
     return moved_keys
@@ -452,7 +453,7 @@ def phase3_keyan(keyan_items: list, already_moved: set) -> dict[str, list[Path]]
             print(f"  → 保存: {dest.name}", flush=True)
 
             # 上传到 Zotero + 移动
-            print(f"  上传并移动...", flush=True)
+            print("  上传并移动...", flush=True)
             ok_upload = upload_to_zotero(dest, key)
             if ok_upload:
                 if item_has_ms(key):

@@ -214,7 +214,8 @@ class MetadataService:
         Args:
             title: Article title
             author: Optional author name
-            return_metadata: If True, return dict with doi, title, url; otherwise just DOI
+            return_metadata: If True, return dict with doi/title/url;
+                otherwise return DOI only
             url: Optional URL (fallback when title doesn't match)
             doi: Optional DOI (highest priority)
 

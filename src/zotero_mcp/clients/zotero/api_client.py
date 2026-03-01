@@ -441,6 +441,7 @@ class ZoteroAPIClient:
         self,
         tag: str,
         limit: int = 100,
+        start: int = 0,
     ) -> list[dict[str, Any]]:
         """
         Get items with a specific tag.
@@ -448,6 +449,7 @@ class ZoteroAPIClient:
         Args:
             tag: Tag name
             limit: Maximum results
+            start: Pagination offset
 
         Returns:
             List of items with the tag
@@ -455,7 +457,7 @@ class ZoteroAPIClient:
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             None,
-            lambda: self.client.items(tag=tag, limit=limit),
+            lambda: self.client.items(tag=tag, limit=limit, start=start),
         )
         return self._check_api_result(result, "get_items_by_tag")
 

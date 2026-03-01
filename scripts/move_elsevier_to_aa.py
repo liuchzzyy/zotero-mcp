@@ -3,6 +3,7 @@
 先列出所有候选条目，确认后再执行移动。
 """
 import sys
+
 from pyzotero import zotero
 
 LIBRARY_ID = "5452188"

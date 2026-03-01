@@ -40,6 +40,11 @@ class LibraryMaintenanceService:
         treated_limit: int,
         dry_run: bool,
     ) -> dict[str, Any]:
+        if scan_limit < 1:
+            return {"error": "scan_limit must be >= 1"}
+        if treated_limit < 1:
+            return {"error": "treated_limit must be >= 1"}
+
         collections, error = await self._resolve_collections(collection_name)
         if error:
             return {"error": error}
@@ -139,6 +144,8 @@ class LibraryMaintenanceService:
         items_updated: list[dict[str, Any]] = []
         total_scanned = 0
         total_tags_removed = 0
+        seen_item_keys: set[str] = set()
+        failures: list[dict[str, str]] = []
 
         for col in collections:
             if update_limit is not None and len(items_updated) >= update_limit:
@@ -178,43 +185,50 @@ class LibraryMaintenanceService:
                         break
 
                     total_scanned += 1
-
-                    full_item = await self.data_service.get_item(item.key)
-                    item_data = full_item.get("data", {})
-                    existing_tags = normalize_tag_names(item_data.get("tags", []))
-                    if not existing_tags:
+                    if item.key in seen_item_keys:
                         continue
+                    seen_item_keys.add(item.key)
 
-                    kept_tags = [
-                        tag_name
-                        for tag_name in existing_tags
-                        if tag_name not in target_tags
-                    ]
-                    removed_tags = [
-                        tag_name
-                        for tag_name in existing_tags
-                        if tag_name in target_tags
-                    ]
+                    try:
+                        full_item = await self.data_service.get_item(item.key)
+                        item_data = full_item.get("data", {})
+                        existing_tags = normalize_tag_names(item_data.get("tags", []))
+                        if not existing_tags:
+                            continue
 
-                    if not removed_tags:
+                        kept_tags = [
+                            tag_name
+                            for tag_name in existing_tags
+                            if tag_name not in target_tags
+                        ]
+                        removed_tags = [
+                            tag_name
+                            for tag_name in existing_tags
+                            if tag_name in target_tags
+                        ]
+
+                        if not removed_tags:
+                            continue
+
+                        removed_count = len(removed_tags)
+                        total_tags_removed += removed_count
+                        items_updated.append(
+                            {
+                                "item_key": item.key,
+                                "title": item.title or "(no title)",
+                                "collection": col_name,
+                                "removed": removed_count,
+                                "removed_tags": sorted(set(removed_tags)),
+                                "kept": len(kept_tags),
+                            }
+                        )
+
+                        if not dry_run:
+                            full_item["data"]["tags"] = to_tag_objects(kept_tags)
+                            await self.data_service.update_item(full_item)
+                    except Exception as exc:
+                        failures.append({"item_key": item.key, "error": str(exc)})
                         continue
-
-                    removed_count = len(removed_tags)
-                    total_tags_removed += removed_count
-                    items_updated.append(
-                        {
-                            "item_key": item.key,
-                            "title": item.title or "(no title)",
-                            "collection": col_name,
-                            "removed": removed_count,
-                            "removed_tags": sorted(set(removed_tags)),
-                            "kept": len(kept_tags),
-                        }
-                    )
-
-                    if not dry_run:
-                        full_item["data"]["tags"] = to_tag_objects(kept_tags)
-                        await self.data_service.update_item(full_item)
 
                 if len(items) < current_batch:
                     break
@@ -227,5 +241,7 @@ class LibraryMaintenanceService:
             "items_updated": len(items_updated),
             "total_tags_removed": total_tags_removed,
             "details": items_updated,
+            "failed": len(failures),
+            "failures": failures,
             "dry_run": dry_run,
         }

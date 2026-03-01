@@ -14,7 +14,10 @@ class GetAnnotationsInput(PaginatedInput):
 
     item_key: str | None = Field(
         default=None,
-        description="Zotero item key to filter annotations by parent item. None for all annotations.",
+        description=(
+            "Zotero item key to filter annotations by parent item. "
+            "None for all annotations."
+        ),
     )
     use_pdf_extraction: bool = Field(
         default=False,
@@ -30,7 +33,10 @@ class GetNotesInput(PaginatedInput):
 
     item_key: str | None = Field(
         default=None,
-        description="Zotero item key to filter notes by parent item. None for all notes.",
+        description=(
+            "Zotero item key to filter notes by parent item. "
+            "None for all notes."
+        ),
     )
     include_standalone: bool = Field(
         default=True,

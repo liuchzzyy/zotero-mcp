@@ -130,19 +130,47 @@ class SearchService:
         if not include_tags:
             return []
 
-        api_limit = max(100, limit)
-        items = await self.api_client.get_items_by_tag(include_tags[0], limit=api_limit)
-        if isinstance(items, int):
-            logger.warning(f"Tag search API returned HTTP status {items}")
-            return []
-
         filtered: list[dict] = []
-        for item in items:
-            item_tags = set(normalize_tag_names(item.get("data", {}).get("tags", [])))
-            if any(tag not in item_tags for tag in include_tags):
-                continue
-            if exclude and any(tag in item_tags for tag in exclude):
-                continue
-            filtered.append(item)
+        seen_keys: set[str] = set()
+        api_limit = max(100, limit)
+        offset = 0
+
+        while len(filtered) < limit:
+            items = await self.api_client.get_items_by_tag(
+                include_tags[0],
+                limit=api_limit,
+                start=offset,
+            )
+            if isinstance(items, int):
+                logger.warning(f"Tag search API returned HTTP status {items}")
+                return []
+            if not items:
+                break
+
+            new_items = 0
+            for item in items:
+                item_key = str(item.get("key") or item.get("data", {}).get("key", ""))
+                if item_key and item_key in seen_keys:
+                    continue
+                if item_key:
+                    seen_keys.add(item_key)
+                    new_items += 1
+                item_tags = set(
+                    normalize_tag_names(item.get("data", {}).get("tags", []))
+                )
+                if any(tag not in item_tags for tag in include_tags):
+                    continue
+                if exclude and any(tag in item_tags for tag in exclude):
+                    continue
+                filtered.append(item)
+                if len(filtered) >= limit:
+                    break
+
+            if len(items) < api_limit:
+                break
+            if new_items == 0:
+                # Protect against endpoints that ignore `start` and repeat pages.
+                break
+            offset += api_limit
 
         return [api_item_to_search_result(item) for item in filtered[:limit]]

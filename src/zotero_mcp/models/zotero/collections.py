@@ -31,7 +31,10 @@ class MoveCollectionInput(BaseInput):
     collection_key: str = Field(..., description="Key of the collection to move")
     parent_key: str | None = Field(
         default=None,
-        description="New parent collection key. Use specific string 'root' or empty string to move to root.",
+        description=(
+            "New parent collection key. Use specific string 'root' "
+            "or empty string to move to root."
+        ),
     )
 
 

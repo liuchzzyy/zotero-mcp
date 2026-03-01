@@ -117,6 +117,7 @@ class ResourceService:
             query,
             limit=max(limit * 2, 50),
             offset=0,
+            qmode="everything",
         )
         hits: list[dict[str, Any]] = []
         query_lower = query.lower()
@@ -326,9 +327,14 @@ class ResourceService:
         )
 
         attachment_keys = self._extract_attachment_keys(upload_result)
-        success = True
-        if isinstance(upload_result, dict) and "successful" in upload_result:
-            success = len(attachment_keys) > 0
+        success = False
+        if isinstance(upload_result, dict):
+            if "successful" in upload_result:
+                success = len(attachment_keys) > 0
+            elif upload_result.get("success") is True:
+                success = True
+            else:
+                success = len(attachment_keys) > 0
 
         return {
             "success": success,

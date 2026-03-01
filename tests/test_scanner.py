@@ -1,6 +1,7 @@
 """Tests for GlobalScanner behavior."""
 
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -41,7 +42,8 @@ async def test_scan_skips_items_without_fulltext_instead_of_failing():
         patch("zotero_mcp.clients.llm.get_llm_client", return_value=MagicMock()),
     ):
         scanner = GlobalScanner()
-        scanner.batch_loader.fetch_many_bundles = AsyncMock(
+        loader = cast(Any, scanner.batch_loader)
+        loader.fetch_many_bundles = AsyncMock(
             return_value=[{"metadata": {"key": "ITEM1"}, "fulltext": None}]
         )
 
@@ -145,7 +147,8 @@ async def test_scan_uses_text_only_initial_fetch_for_deepseek():
         patch("zotero_mcp.clients.llm.get_llm_client", return_value=deepseek_client),
     ):
         scanner = GlobalScanner()
-        scanner.batch_loader.fetch_many_bundles = AsyncMock(
+        loader = cast(Any, scanner.batch_loader)
+        loader.fetch_many_bundles = AsyncMock(
             return_value=[{"metadata": {"key": "ITEM1"}, "fulltext": "text"}]
         )
 
@@ -159,7 +162,7 @@ async def test_scan_uses_text_only_initial_fetch_for_deepseek():
         )
 
     assert result["processed"] == 1
-    first_call = scanner.batch_loader.fetch_many_bundles.await_args_list[0]
+    first_call = loader.fetch_many_bundles.await_args_list[0]
     assert first_call.kwargs["include_multimodal"] is False
     analyze_call = workflow_service._analyze_single_item.await_args
     assert analyze_call.kwargs["template"] == "auto"
@@ -202,7 +205,8 @@ async def test_scan_backfills_multimodal_only_for_missing_fulltext_items():
         patch("zotero_mcp.clients.llm.get_llm_client", return_value=deepseek_client),
     ):
         scanner = GlobalScanner()
-        scanner.batch_loader.fetch_many_bundles = AsyncMock(
+        loader = cast(Any, scanner.batch_loader)
+        loader.fetch_many_bundles = AsyncMock(
             side_effect=[
                 [{"metadata": {"key": "ITEM1"}, "fulltext": None}],
                 [
@@ -225,9 +229,9 @@ async def test_scan_backfills_multimodal_only_for_missing_fulltext_items():
 
     assert result["processed"] == 1
     assert result["skipped_no_fulltext"] == 0
-    assert scanner.batch_loader.fetch_many_bundles.await_count == 2
-    first_call = scanner.batch_loader.fetch_many_bundles.await_args_list[0]
-    second_call = scanner.batch_loader.fetch_many_bundles.await_args_list[1]
+    assert loader.fetch_many_bundles.await_count == 2
+    first_call = loader.fetch_many_bundles.await_args_list[0]
+    second_call = loader.fetch_many_bundles.await_args_list[1]
     assert first_call.kwargs["include_fulltext"] is True
     assert first_call.kwargs["include_multimodal"] is False
     assert second_call.kwargs["include_fulltext"] is False
@@ -274,7 +278,8 @@ async def test_scan_auto_selects_claude_when_images_present():
         ) as mock_get_client,
     ):
         scanner = GlobalScanner()
-        scanner.batch_loader.fetch_many_bundles = AsyncMock(
+        loader = cast(Any, scanner.batch_loader)
+        loader.fetch_many_bundles = AsyncMock(
             side_effect=[
                 [
                     {
@@ -297,8 +302,8 @@ async def test_scan_auto_selects_claude_when_images_present():
 
     assert result["processed"] == 1
     mock_get_client.assert_called_once_with(provider="claude-cli")
-    first_call = scanner.batch_loader.fetch_many_bundles.await_args_list[0]
-    second_call = scanner.batch_loader.fetch_many_bundles.await_args_list[1]
+    first_call = loader.fetch_many_bundles.await_args_list[0]
+    second_call = loader.fetch_many_bundles.await_args_list[1]
     assert first_call.kwargs["include_multimodal"] is True
     assert second_call.kwargs["include_multimodal"] is True
 
@@ -340,7 +345,8 @@ async def test_scan_counts_skipped_existing_notes_in_metrics():
         patch("zotero_mcp.clients.llm.get_llm_client", return_value=deepseek_client),
     ):
         scanner = GlobalScanner()
-        scanner.batch_loader.fetch_many_bundles = AsyncMock(
+        loader = cast(Any, scanner.batch_loader)
+        loader.fetch_many_bundles = AsyncMock(
             return_value=[{"metadata": {"key": "ITEM1"}, "fulltext": "text"}]
         )
 
