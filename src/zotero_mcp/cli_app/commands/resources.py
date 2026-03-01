@@ -221,6 +221,34 @@ def register_notes(subparsers: argparse._SubParsersAction) -> None:
     delete.add_argument("--note-key", required=True)
     add_output_arg(delete)
 
+    relate = notes_sub.add_parser(
+        "relate",
+        help="Analyze one note against library/collection notes and write relations",
+    )
+    relate.add_argument("--note-key", required=True)
+    relate.add_argument(
+        "--collection",
+        choices=["all", "collection"],
+        default="all",
+        help="Scope to all library notes or one collection",
+    )
+    relate.add_argument(
+        "--collection-key",
+        help="Collection key or name when --collection=collection",
+    )
+    relate.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Analyze only; do not write relations or update note",
+    )
+    relate.add_argument(
+        "--bidirectional",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Write reciprocal dc:relation on candidate notes (default: true)",
+    )
+    add_output_arg(relate)
+
 
 def run_notes(args: argparse.Namespace) -> int:
     load_config()
@@ -228,6 +256,15 @@ def run_notes(args: argparse.Namespace) -> int:
 
     if args.subcommand == "create" and bool(args.content) == bool(args.content_file):
         raise ValueError("Provide exactly one of --content or --content-file")
+    if (
+        args.subcommand == "relate"
+        and args.collection == "collection"
+        and not args.collection_key
+    ):
+        raise ValueError(
+            "--collection collection requires --collection-key "
+            "(supports key or collection name)"
+        )
 
     service = ResourceService()
 
@@ -253,6 +290,13 @@ def run_notes(args: argparse.Namespace) -> int:
             offset=args.offset,
         ),
         "delete": lambda: service.delete_note(normalize_item_key(args.note_key)),
+        "relate": lambda: service.relate_note(
+            note_key=normalize_item_key(args.note_key),
+            collection=args.collection,
+            collection_key=args.collection_key,
+            dry_run=args.dry_run,
+            bidirectional=args.bidirectional,
+        ),
     }
 
     handler = handlers.get(args.subcommand)

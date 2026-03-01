@@ -122,6 +122,7 @@ def test_notes_subcommands_are_exposed():
         "create",
         "search",
         "delete",
+        "relate",
     ]:
         assert subcommand in result.stdout
 
@@ -192,6 +193,7 @@ def test_dry_run_defaults_are_disabled():
         ["tags", "purge", "--tags", "AI分析"],
         ["tags", "rename", "--old-name", "old", "--new-name", "new"],
         ["collections", "delete-empty"],
+        ["notes", "relate", "--note-key", "ABC12345", "--collection", "all"],
     ]
 
     for argv in scenarios:
