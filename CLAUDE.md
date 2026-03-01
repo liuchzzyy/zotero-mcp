@@ -63,7 +63,7 @@ Key variables:
 
 ### `classify_shortterms.py` — moved to skill
 
-**Canonical location:** `~/.claude/skills/zotero-shortterms-classify/classify_shortterms.py`
+**Canonical location:** `~/.claude/skills/zotero-item-classify/classify_shortterms.py`
 
 Routes items from `01_SHORTTERMS` into four inboxes:
 
@@ -75,13 +75,13 @@ Routes items from `01_SHORTTERMS` into four inboxes:
 | `00_INBOXS_DD` | Duplicate PDFs (same article twice) |
 
 ```bash
-SCRIPT="C:/Users/chengliu/.claude/skills/zotero-shortterms-classify/classify_shortterms.py"
+SCRIPT="C:/Users/chengliu/.claude/skills/zotero-item-classify/classify_shortterms.py"
 uv run python "$SCRIPT"            # classify new items
 uv run python "$SCRIPT" recheck    # re-check CC↔DD boundary
 uv run python "$SCRIPT" recheck_bb # re-verify BB review items
 ```
 
-See `~/.claude/skills/zotero-shortterms-classify/SKILL.md` for full details.
+See `~/.claude/skills/zotero-item-classify/SKILL.md` for full details.
 
 ### `scripts/generate_zotero_windows_shortcuts_pdf.py`
 
