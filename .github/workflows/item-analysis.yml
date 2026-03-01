@@ -39,6 +39,12 @@ on:
         default: "deepseek"
         type: choice
         options: ["auto", "deepseek"]
+      template:
+        description: "Analysis template alias"
+        required: false
+        default: "auto"
+        type: choice
+        options: ["research", "review", "book", "auto"]
       dry_run:
         description: "Preview mode (no write)"
         required: false
@@ -79,6 +85,7 @@ jobs:
           INPUT_SOURCE_COLLECTION: ${{ github.event.inputs.source_collection || '00_INBOXS_BB' }}
           INPUT_TARGET_COLLECTION: ${{ github.event.inputs.target_collection || '01_SHORTTERMS' }}
           INPUT_LLM_PROVIDER: ${{ github.event.inputs.llm_provider || 'deepseek' }}
+          INPUT_TEMPLATE: ${{ github.event.inputs.template || 'auto' }}
           INPUT_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: |
           ARGS=(
@@ -86,6 +93,7 @@ jobs:
             --source-collection "$INPUT_SOURCE_COLLECTION"
             --target-collection "$INPUT_TARGET_COLLECTION"
             --llm-provider "$INPUT_LLM_PROVIDER"
+            --template "$INPUT_TEMPLATE"
           )
 
           if [ "$INPUT_ALL" = "true" ]; then
@@ -175,6 +183,7 @@ jobs:
             | All | ${{ github.event.inputs.all || 'false' }} |
             | Treated limit | ${{ github.event.inputs.treated_limit || '20' }} |
             | LLM | ${{ github.event.inputs.llm_provider || 'deepseek' }} |
+            | Template | ${{ github.event.inputs.template || 'auto' }} |
             | Dry Run | ${{ github.event.inputs.dry_run || 'false' }} |
           metrics: ${{ steps.metrics.outputs.json }}
 

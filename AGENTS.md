@@ -40,6 +40,12 @@
   - `--treated-limit` 必须 `>=1`
   - 需要全库处理时使用 `--all`（而不是 `--treated-limit=0`）
   - `item-analysis --llm-provider` 取值：`auto | deepseek`
+  - `item-analysis --template` 取值：`research | review | book | auto`
+  - `item-analysis --template auto` 判定优先级：
+    1. `itemType` 属于 `book/bookSection/encyclopediaArticle/dictionaryEntry` -> `book`
+    2. 否则优先基于 PDF 文本分类：`review | si | ms`（其中 `ms=manuscript`）
+    3. `si/ms` 均映射为 `research` 模板，`review` 映射为 `review` 模板
+    4. 若无可用全文则回退到标题/摘要元数据分类
 
 #### `semantic`
 - `db-update` / `db-status` / `db-inspect`
