@@ -1,11 +1,12 @@
 """Test WorkflowService multi-modal integration."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from zotero_mcp.models.workflow import AnalysisItem
-from zotero_mcp.services.workflow import WorkflowService
+from zotero_mcp.services.workflow import WorkflowService, classify_pdf_type_async
 from zotero_mcp.utils.data.templates import (
     RESEARCH_ANALYSIS_TEMPLATE_JSON,
     REVIEW_ANALYSIS_TEMPLATE_JSON,
@@ -736,7 +737,7 @@ async def test_analyze_single_item_resolves_review_template_alias(workflow_servi
 
 
 @pytest.mark.asyncio
-async def test_analyze_single_item_auto_detects_review_from_title_without_api_key(
+async def test_analyze_single_item_auto_detects_review_from_pdf_classifier(
     workflow_service, monkeypatch
 ):
     item = MagicMock()
@@ -757,7 +758,10 @@ async def test_analyze_single_item_auto_detects_review_from_title_without_api_ke
     llm_client.provider = "deepseek"
     workflow_service._call_llm_analysis = AsyncMock(return_value="analysis")
     workflow_service._ensure_structured_quality = AsyncMock(return_value="analysis")
-    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "zotero_mcp.services.workflow.classify_pdf_type_async",
+        AsyncMock(return_value="review"),
+    )
 
     result = await workflow_service._analyze_single_item(
         item=item,
@@ -773,6 +777,72 @@ async def test_analyze_single_item_auto_detects_review_from_title_without_api_ke
     assert result.success is True
     call_kwargs = workflow_service._call_llm_analysis.await_args.kwargs
     assert call_kwargs["template"] == REVIEW_ANALYSIS_TEMPLATE_JSON
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "model_reply, expected",
+    [("review", "review"), ("si", "si"), ("ms", "ms")],
+)
+async def test_classify_pdf_type_async_accepts_direct_labels(
+    monkeypatch, model_reply, expected
+):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    mock_response = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=model_reply))]
+    )
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+    with patch("openai.AsyncOpenAI", return_value=mock_client):
+        result = await classify_pdf_type_async("fulltext snippet")
+
+    assert result == expected
+
+
+@pytest.mark.asyncio
+async def test_analyze_single_item_auto_maps_ms_to_research_template(
+    workflow_service, monkeypatch
+):
+    item = MagicMock()
+    item.key = "ITEM5"
+    item.title = "A standard article"
+    item.authors = "Author"
+    item.date = "2026"
+    item.doi = "10.1/auto-ms"
+
+    bundle = {
+        "metadata": {
+            "data": {"itemType": "journalArticle", "publicationTitle": "Journal"}
+        },
+        "fulltext": "text",
+        "annotations": [],
+        "notes": [],
+        "multimodal": {"images": [], "tables": []},
+    }
+    llm_client = AsyncMock()
+    llm_client.provider = "deepseek"
+    workflow_service._call_llm_analysis = AsyncMock(return_value="analysis")
+    workflow_service._ensure_structured_quality = AsyncMock(return_value="analysis")
+    monkeypatch.setattr(
+        "zotero_mcp.services.workflow.classify_pdf_type_async",
+        AsyncMock(return_value="ms"),
+    )
+
+    result = await workflow_service._analyze_single_item(
+        item=item,
+        bundle=bundle,
+        llm_client=llm_client,
+        skip_existing=True,
+        template="auto",
+        dry_run=True,
+        use_structured=True,
+        include_multimodal=False,
+    )
+
+    assert result.success is True
+    call_kwargs = workflow_service._call_llm_analysis.await_args.kwargs
+    assert call_kwargs["template"] == RESEARCH_ANALYSIS_TEMPLATE_JSON
 
 
 @pytest.mark.asyncio

@@ -59,17 +59,17 @@ Reply with exactly one word: research  OR  review"""
 
 _CLASSIFY_PDF_PROMPT = """\
 以下是一篇学术文献的前3页内容。请判断它属于哪种类型：
-(A) 综述文章（review article）- 系统回顾某领域研究进展，引用大量文献
-(B) 支撑信息（supporting information / supplementary materials）- 附加数据、方法细节
-    ⚠️ 支撑信息的PDF通常在第一页标题处包含以下字样之一：
-       'Supporting Information'、'Supplementary Materials'、
-       'Electronic Supplementary Information'、'Supporting Data' 等
-(C) 研究论文正文（research article）- 报告原创实验结果和发现
+- review：综述文章（review article）- 系统回顾某领域研究进展，引用大量文献
+- si：支撑信息（supporting information / supplementary materials）- 附加数据、方法细节
+  ⚠️ 支撑信息的PDF通常在第一页标题处包含以下字样之一：
+     'Supporting Information'、'Supplementary Materials'、
+     'Electronic Supplementary Information'、'Supporting Data' 等
+- ms：研究论文正文（main study / research article）- 报告原创实验结果和发现
 
 文献内容（前3页）：
 {text}
 
-只回答字母 A、B 或 C，不要解释。"""
+只回答以下三个小写标签之一，不要解释：review / si / ms"""
 
 
 _REVIEW_KEYWORD_PATTERNS = (
@@ -165,24 +165,26 @@ async def classify_item_type_async(
 
 
 async def classify_pdf_type_async(fulltext: str) -> str:
-    """Classify a paper's PDF as 'review', 'si', or 'research' via DeepSeek.
+    """Classify a paper's PDF as 'review', 'si', or 'ms' via DeepSeek.
 
     Uses the first 2000 characters of the extracted fulltext (equivalent to
     ~3 pages), matching the approach in the zotero-item-classify skill.
 
-    Returns one of: 'review', 'si', 'research'.  Falls back to 'research'
+    Returns one of: 'review', 'si', 'ms'. Falls back to 'ms'
     on any error or when fulltext is empty.
     """
     if not fulltext or not fulltext.strip():
-        return "research"
+        return "ms"
 
     import os
 
     api_key = os.getenv("DEEPSEEK_API_KEY", "")
     base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
     if not api_key:
-        logger.warning("DEEPSEEK_API_KEY not set; defaulting pdf classification to 'research'")
-        return "research"
+        logger.warning(
+            "DEEPSEEK_API_KEY not set; defaulting pdf classification to 'ms'"
+        )
+        return "ms"
 
     text_snippet = fulltext[:2000].strip()
     prompt = _CLASSIFY_PDF_PROMPT.format(text=text_snippet)
@@ -197,18 +199,21 @@ async def classify_pdf_type_async(fulltext: str) -> str:
             temperature=0,
             max_tokens=5,
         )
-        answer = (response.choices[0].message.content or "").strip().upper()
-        if "A" in answer:
-            return "review"
-        if "B" in answer:
-            return "si"
-        if "C" in answer:
-            return "research"
-        logger.warning(f"classify_pdf_type_async: unrecognised answer '{answer}'; defaulting to 'research'")
-        return "research"
+        answer = (response.choices[0].message.content or "").strip().lower()
+        first_token = re.split(r"[\s,;:(){}\[\]\"'`]+", answer)[0]
+        if first_token in {"review", "si", "ms"}:
+            return first_token
+        for token in re.findall(r"[a-z]+", answer):
+            if token in {"review", "si", "ms"}:
+                return token
+        logger.warning(
+            "classify_pdf_type_async: unrecognised answer '%s'; defaulting to 'ms'",
+            answer,
+        )
+        return "ms"
     except Exception as e:
-        logger.warning(f"classify_pdf_type_async failed ({e}); defaulting to 'research'")
-        return "research"
+        logger.warning(f"classify_pdf_type_async failed ({e}); defaulting to 'ms'")
+        return "ms"
 
 
 class WorkflowService:
@@ -710,7 +715,7 @@ class WorkflowService:
                 # Priority 2: Prefer PDF-text classification when fulltext available
                 elif fulltext_for_classify:
                     pdf_type = await classify_pdf_type_async(fulltext_for_classify)
-                    # 'si' and 'research' both use the 'research' template
+                    # 'si' and 'ms' both use the 'research' template
                     detected = "review" if pdf_type == "review" else "research"
                     logger.info(
                         "Template auto-detected from PDF text",
