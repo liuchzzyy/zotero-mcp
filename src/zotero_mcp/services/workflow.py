@@ -52,6 +52,20 @@ Abstract (first 300 chars): {abstract}
 
 Reply with exactly one word: research  OR  review"""
 
+_CLASSIFY_PDF_PROMPT = """\
+以下是一篇学术文献的前3页内容。请判断它属于哪种类型：
+(A) 综述文章（review article）- 系统回顾某领域研究进展，引用大量文献
+(B) 支撑信息（supporting information / supplementary materials）- 附加数据、方法细节
+    ⚠️ 支撑信息的PDF通常在第一页标题处包含以下字样之一：
+       'Supporting Information'、'Supplementary Materials'、
+       'Electronic Supplementary Information'、'Supporting Data' 等
+(C) 研究论文正文（research article）- 报告原创实验结果和发现
+
+文献内容（前3页）：
+{text}
+
+只回答字母 A、B 或 C，不要解释。"""
+
 
 _REVIEW_KEYWORD_PATTERNS = (
     r"\breview\b",
@@ -142,6 +156,53 @@ async def classify_item_type_async(
         logger.warning(
             f"classify_item_type_async failed ({e}); defaulting to 'research'"
         )
+        return "research"
+
+
+async def classify_pdf_type_async(fulltext: str) -> str:
+    """Classify a paper's PDF as 'review', 'si', or 'research' via DeepSeek.
+
+    Uses the first 2000 characters of the extracted fulltext (equivalent to
+    ~3 pages), matching the approach in the zotero-item-classify skill.
+
+    Returns one of: 'review', 'si', 'research'.  Falls back to 'research'
+    on any error or when fulltext is empty.
+    """
+    if not fulltext or not fulltext.strip():
+        return "research"
+
+    import os
+
+    api_key = os.getenv("DEEPSEEK_API_KEY", "")
+    base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+    if not api_key:
+        logger.warning("DEEPSEEK_API_KEY not set; defaulting pdf classification to 'research'")
+        return "research"
+
+    text_snippet = fulltext[:2000].strip()
+    prompt = _CLASSIFY_PDF_PROMPT.format(text=text_snippet)
+
+    try:
+        from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        response = await client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=5,
+        )
+        answer = (response.choices[0].message.content or "").strip().upper()
+        if "A" in answer:
+            return "review"
+        if "B" in answer:
+            return "si"
+        if "C" in answer:
+            return "research"
+        logger.warning(f"classify_pdf_type_async: unrecognised answer '{answer}'; defaulting to 'research'")
+        return "research"
+    except Exception as e:
+        logger.warning(f"classify_pdf_type_async failed ({e}); defaulting to 'research'")
         return "research"
 
 
@@ -627,20 +688,37 @@ class WorkflowService:
             # 4. Auto-classify item type when template="auto"
             if template is not None and template.strip().lower() == "auto":
                 meta_data = bundle.get("metadata", {}).get("data", {})
-                detected = await classify_item_type_async(
-                    title=item.title or "",
-                    journal=(
-                        meta_data.get("publicationTitle")
-                        or meta_data.get("bookTitle")
-                        or ""
-                    ),
-                    abstract=meta_data.get("abstractNote") or "",
-                )
+                fulltext_for_classify = context.get("fulltext") or ""
+
+                # Prefer PDF-text classification (more accurate than metadata-only)
+                # when fulltext is available; fall back to title/abstract otherwise.
+                if fulltext_for_classify:
+                    pdf_type = await classify_pdf_type_async(fulltext_for_classify)
+                    # 'si' and 'research' both use the 'research' template
+                    detected = "review" if pdf_type == "review" else "research"
+                    logger.info(
+                        "Template auto-detected from PDF text",
+                        extra={
+                            "item_key": item.key,
+                            "pdf_type": pdf_type,
+                            "detected_type": detected,
+                        },
+                    )
+                else:
+                    detected = await classify_item_type_async(
+                        title=item.title or "",
+                        journal=(
+                            meta_data.get("publicationTitle")
+                            or meta_data.get("bookTitle")
+                            or ""
+                        ),
+                        abstract=meta_data.get("abstractNote") or "",
+                    )
+                    logger.info(
+                        "Template auto-detected from metadata (no fulltext)",
+                        extra={"item_key": item.key, "detected_type": detected},
+                    )
                 template = detected
-                logger.info(
-                    "Template auto-detected",
-                    extra={"item_key": item.key, "detected_type": detected},
-                )
 
             # 4b. Resolve alias → full template string
             template = resolve_analysis_template(
