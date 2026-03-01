@@ -61,24 +61,23 @@ Key variables:
 
 ## Key Scripts
 
-### `classify_shortterms.py` — moved to skill
+### `zotero-item-classify.py` — moved to skill
 
-**Canonical location:** `~/.claude/skills/zotero-item-classify/classify_shortterms.py`
+**Canonical location:** `~/.claude/skills/zotero-item-classify/zotero-item-classify.py`
 
-Routes items from `01_SHORTTERMS` into four inboxes:
+Routes items from `01_SHORTTERMS` into three inboxes:
 
 | Inbox | Criteria |
 |-------|----------|
-| `00_INBOXS_AA` | Single PDF, AI-tagged — ready for analysis |
-| `00_INBOXS_BB` | Review articles (综述) |
-| `00_INBOXS_CC` | Multiple PDFs (main + SI combined) |
-| `00_INBOXS_DD` | Duplicate PDFs (same article twice) |
+| `00_INBOXS_BB` | Reference materials (books, encyclopedias) |
+| `00_INBOXS_AA` | Regular articles — single PDF or duplicate PDFs |
+| `00_INBOXS_CC` | Complete — reviews or main paper + SI |
 
 ```bash
-SCRIPT="C:/Users/chengliu/.claude/skills/zotero-item-classify/classify_shortterms.py"
+SCRIPT="C:/Users/chengliu/.claude/skills/zotero-item-classify/zotero-item-classify.py"
 uv run python "$SCRIPT"            # classify new items
-uv run python "$SCRIPT" recheck    # re-check CC↔DD boundary
-uv run python "$SCRIPT" recheck_bb # re-verify BB review items
+uv run python "$SCRIPT" recheck    # re-sort AA (→BB/CC)
+uv run python "$SCRIPT" recheck_bb # re-verify BB reference types
 ```
 
 See `~/.claude/skills/zotero-item-classify/SKILL.md` for full details.
