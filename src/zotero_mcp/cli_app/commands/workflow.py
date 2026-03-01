@@ -50,8 +50,8 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     )
     item_analysis.add_argument(
         "--source-collection",
-        default="00_INBOXS_AA",
-        help="Collection to scan first (default: 00_INBOXS_AA)",
+        default="00_INBOXS_BB",
+        help="Collection to scan first (default: 00_INBOXS_BB)",
     )
     item_analysis.add_argument(
         "--template",
