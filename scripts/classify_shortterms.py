@@ -14,17 +14,17 @@ Process all items in 01_SHORTTERMS one by one and route to correct inbox:
 Run:
     uv run python scripts/classify_shortterms.py
 """
-import os
+from collections import Counter
+from pathlib import Path
 import re
 import time
-import requests
 import urllib.parse
-import pyzotero.zotero as zotero
-import httpx
+
 import fitz  # PyMuPDF
+import httpx
 from openai import OpenAI
-from pathlib import Path
-from collections import Counter
+import pyzotero.zotero as zotero
+import requests
 
 # ── Config ────────────────────────────────────────────────────────────────────
 LIBRARY_ID        = '5452188'
@@ -93,7 +93,7 @@ def extract_pdf_text(path: Path, max_pages: int = PDF_MAX_PAGES, max_chars: int 
             text += doc[page_num].get_text()
         doc.close()
         return text[:max_chars].strip()
-    except Exception as e:
+    except Exception:
         return ''
 
 # ── DeepSeek classification ───────────────────────────────────────────────────
@@ -207,7 +207,7 @@ def download_file(url: str, dest: Path, headers=None) -> tuple[bool, float]:
             dest.unlink()
             return False, 0.0
         return True, size_mb
-    except Exception as e:
+    except Exception:
         if dest.exists():
             dest.unlink()
         return False, 0.0
